@@ -22,7 +22,7 @@ static bool armed;
 static Hd2dCapture *capture;
 #endif
 static Hd2dIdentity id;
-static uint8_t pixels[224][1056]; /* Exercise source pitch and untouched padding. */
+static _Alignas(4) uint8_t pixels[224][1056]; /* Source pitch and untouched padding. */
 #if defined(HD2D_SCANOUT_CAPTURE) && !defined(TEST_ADAPTER)
 static uint8_t rgba[HD2D_RGBA_BYTES];
 #endif

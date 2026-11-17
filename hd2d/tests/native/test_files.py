@@ -21,10 +21,11 @@ def main():
     env = {k: v for k, v in os.environ.items() if not k.startswith(("HD2D_CAPTURE_", "TEST_"))}
     env.pop("SNESRECOMP_LAYER_MASK", None)
 
-    def run(exe, *args, extra=None, success=True):
+    def run(exe, *args, extra=None, success=True, expected=None):
         result = subprocess.run([exe, *map(str, args)], env=env | (extra or {}),
                                 text=True, capture_output=True)
-        check((result.returncode == 0) == success,
+        code = expected if expected is not None else (0 if success else 2)
+        check(result.returncode == code,
               f"{exe} unexpected exit {result.returncode}: {result.stdout} {result.stderr}")
         return result
 
@@ -133,7 +134,7 @@ def main():
         altered[-32:] = hashlib.sha256(altered[:-32]).digest()
         fmt.decode(altered)  # Valid structure cannot establish pixel parity.
         invalid.write_bytes(altered)
-        check("pixel mismatch" in run(replay, invalid, success=False).stdout, "parity oracle")
+        check("pixel mismatch" in run(replay, invalid, expected=1).stdout, "parity oracle")
         print(f"cross-process/adapter/publication checks and {len(mutations)+5} malformed/parity cases: PASS")
 
 

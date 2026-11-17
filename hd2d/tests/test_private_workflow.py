@@ -1,5 +1,6 @@
 """Private-input checks use only original synthetic bytes, never a game ROM."""
 import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -60,11 +61,35 @@ class PrivateWorkflowTests(unittest.TestCase):
             with self.subTest(script=script), self.assertRaises(ValueError):
                 capture_frame.check_script(script)
 
-    def test_runtime_defaults_request_native_non_speculative_capture(self):
-        self.assertIn("Widescreen = 0", capture_frame.CONFIG)
-        self.assertIn("RunAhead = 0", capture_frame.CONFIG)
-        self.assertIn("NoSpriteLimits = 0", capture_frame.CONFIG)
-        self.assertIn("OutputMethod = SDL-Software", capture_frame.CONFIG)
+    def test_capture_plan_preserves_paths_and_does_not_launch(self):
+        local = build.ROOT / "hd2d/local"
+        local.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local) as temp:
+            root = Path(temp)
+            script = root / "input with spaces.txt"
+            script.write_text("wait 1\nquit\n")
+            private = {"path": "/private/Mega Man X2.sfc"}
+            with patch.object(capture_frame, "check_rom", return_value=private), \
+                 patch.object(capture_frame.subprocess, "run") as run:
+                report, inputs = capture_frame.plan(sys.executable, "private", root / "new", script, 9)
+            run.assert_not_called()
+            self.assertIn(private["path"], report["command"])
+            self.assertEqual(report["environment"]["HD2D_CAPTURE_DRAW"], "9")
+            self.assertEqual(report["input_script_sha256"], hashlib.sha256(inputs).hexdigest())
+            self.assertFalse((root / "new").exists())
+
+    def test_failed_or_timed_out_host_never_reports_fidelity(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for name, code, timeout in (("failure", "raise SystemExit(7)", 2),
+                                        ("timeout", "import time; time.sleep(1)", 0.02)):
+                out = Path(temp) / name
+                report = {"working_directory": str(out), "environment": {},
+                          "command": [sys.executable, "-c", code]}
+                self.assertEqual(capture_frame.execute(report, b"quit\n", timeout), 2)
+                saved = json.loads((out / "run-report.json").read_text())
+                self.assertEqual(saved["status"], "blocked-or-failed")
+                self.assertNotIn("capture", saved)
+                self.assertTrue((out / "capture.log").is_file())
 
 
 if __name__ == "__main__":
