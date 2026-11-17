@@ -1,0 +1,16 @@
+# Runtime/game-derived material must stay here, never in fixtures.
+/local/
+/exports/
+/captures/
+/generated/
+/build*/
+/.venv/
+__pycache__/
+*.py[cod]
+# Future Unity project: preserve Assets, Packages and ProjectSettings.
+/unity/[Ll]ibrary/
+/unity/[Tt]emp/
+/unity/[Oo]bj/
+/unity/[Ll]ogs/
+/unity/[Uu]ser[Ss]ettings/
+/unity/[Bb]uild*/

@@ -18,7 +18,7 @@ hg51bs169.data.rom
 # Build trees
 /build*/
 /release*/
-/CMakeFiles/
+CMakeFiles/
 CMakeCache.txt
 
 # Local runtime state
@@ -42,3 +42,15 @@ tools/__pycache__/
 /logs/
 /last_run_report.json
 /replay-divergence.sav
+
+# HD-2D local inputs / captures (synthetic sources live under hd2d/fixtures).
+*.rom
+*.sav
+*.state
+*.replay
+*.replay.*
+*.snesmod
+/exports/
+/captures/
+*.o
+# Wavefront .obj meshes are source assets; compiler outputs belong in build trees.

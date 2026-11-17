@@ -1,0 +1,38 @@
+{
+  "audit_date": "2026-11-17",
+  "repository_url": "https://github.com/mstan/MegaManX2Recomp.git",
+  "upstream_commit": "622aa882881a07c8238ce17a14381c7d75a979d7",
+  "starting_branch": "master",
+  "work_branch": "feature/hd2d-sprint-0",
+  "owner_fork_confirmed": true,
+  "dependencies": [
+    {
+      "path": "snesrecomp",
+      "commit": "93fc677a2a9b688751d575ed1232343d83d3d2c0",
+      "url": "https://github.com/RetroPortingToolKit/snesrecomp.git"
+    },
+    {
+      "path": "recomp-ui",
+      "commit": "0546fbcb0126bb14bf88d2128b4fe8a4229570a3",
+      "url": "https://github.com/RetroPortingToolKit/recomp-ui.git"
+    },
+    {
+      "path": "snesrecomp/lib/recomp-net",
+      "commit": "8c76fb643339144a3a84d5ba8f5defe6250dcd26",
+      "url": "https://github.com/RetroPortingToolKit/recomp-net.git"
+    },
+    {
+      "path": "snesrecomp/lib/retcomm-rbengine",
+      "commit": "2a03e73693acee0fb78076ea058642c931bef12e",
+      "url": "https://github.com/RetroPortingToolKit/rbengine.git"
+    },
+    {
+      "path": "third_party/dizProjects",
+      "commit": "c16f01134f29e4a61b41a3d8ddf5121b556cbdc7",
+      "url": "https://github.com/bogaa/dizProjects.git"
+    }
+  ],
+  "canonical_repository_url": "https://github.com/nkanhai/MegaManX2GraphicsUpgrade.git",
+  "canonical_default_branch": "master",
+  "canonical_base_commit": "622aa882881a07c8238ce17a14381c7d75a979d7"
+}
