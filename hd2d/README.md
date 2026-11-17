@@ -1,8 +1,8 @@
 # X2 HD-2D
 
 Unofficial, noncommercial HD-2D presentation experiment for *Mega Man X2*.
-Preserve the original simulation; enhance its presentation. Unity 6 / URP is
-the intended renderer, not an implemented integration.
+Preserve the original simulation; enhance its presentation. A Unity 6 / URP
+offline reconstruction prototype is available; live integration remains deferred.
 
 Canonical repository: [nkanhai/MegaManX2GraphicsUpgrade](https://github.com/nkanhai/MegaManX2GraphicsUpgrade).
 Our additions live in `hd2d/`. The original runtime is Matthew Stanley's
@@ -15,6 +15,8 @@ introduced. Dependency notices and history remain intact.
 
 ## Start here
 
+- [Unity component inspector, private imports and Mac qualification](unity/README.md)
+- [Sprint 4 reconstruction report and fidelity limits](docs/roadmap/SPRINT_4_REPORT.md)
 - [Interactive gameplay capture on macOS](docs/guides/INTERACTIVE_CAPTURE.md)
 - [Sprint 3 report and owner-observed Mac validation](docs/roadmap/SPRINT_3_REPORT.md)
 - [Sprint 2 report and real-game validation blockers](docs/roadmap/SPRINT_2_REPORT.md)
@@ -67,5 +69,9 @@ and a real opening-narrative capture with zero pixel differences. This is local
 owner evidence, separate from cloud CI. Sprint 3 adds an opt-in keyboard trigger
 for sequential captures during normal play, private session directories and
 automated SDL/native isolation tests. Two interactive gameplay captures still
-need owner qualification on the Mac. Unity and asset cataloguing remain deferred.
-Runtime v1 and Sprint 0 synthetic JSON stay separate.
+need owner qualification on the Mac. Sprint 4 adds an offline Unity component
+inspector, a strict C# runtime-v1 reader, independently decoded BG/OAM graphics
+and an isolated normal-map experiment. Managed reconstruction matches eighteen
+original synthetic frames exactly; Unity Editor/GPU and private gameplay import
+still need owner qualification. Live integration and asset cataloguing remain
+deferred. Runtime v1 and Sprint 0 synthetic JSON stay separate.

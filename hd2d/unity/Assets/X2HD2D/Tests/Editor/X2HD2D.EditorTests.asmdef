@@ -1,0 +1,17 @@
+{
+  "name": "X2HD2D.EditorTests",
+  "references": [
+    "X2HD2D.Core",
+    "X2HD2D.Runtime",
+    "X2HD2D.Editor",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ],
+  "autoReferenced": true,
+  "includePlatforms": [
+    "Editor"
+  ],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
