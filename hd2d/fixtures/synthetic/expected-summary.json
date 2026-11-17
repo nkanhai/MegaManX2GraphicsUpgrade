@@ -1,0 +1,33 @@
+{
+  "format": "x2-hd2d.synthetic-ppu",
+  "version": 1,
+  "source": "synthetic",
+  "sequence": 0,
+  "profile": "static-mode1-native",
+  "viewport": {
+    "height": 224,
+    "width": 256
+  },
+  "hScroll": [
+    3,
+    11,
+    0,
+    0
+  ],
+  "vScroll": [
+    5,
+    7,
+    0,
+    0
+  ],
+  "memory_bytes": {
+    "vram": 65536,
+    "cgram": 512,
+    "oam": 544
+  },
+  "memory_sha256": {
+    "vram": "77c26de2648e0a9ddb240be2ddddd8391d0a45817a0c566548f0cec770dfafb5",
+    "cgram": "7f68ab74bd7298fb5354cd259a4e7d8855ee23967e3d52c5ed52007bf6a83871",
+    "oam": "e13ff001f7ca9b4cee247cc6239b1f6a7acb77df061b99a4f0b603689e39ee6b"
+  }
+}
