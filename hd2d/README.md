@@ -15,6 +15,9 @@ introduced. Dependency notices and history remain intact.
 
 ## Start here
 
+- [Sprint 2 report and real-game validation blockers](docs/roadmap/SPRINT_2_REPORT.md)
+- [Private ROM-backed build, intro capture and image validation](docs/guides/PRIVATE_CAPTURE_WORKFLOW.md)
+- [Apple Silicon investigation](docs/architecture/MACOS_NATIVE_AUDIT.md)
 - [Sprint 1 implementation, tests and limitations](docs/roadmap/SPRINT_1_REPORT.md)
 - [Native recorder usage and ROM-independent replay](bridge/README.md)
 - [Versioned runtime scanout format](schemas/RUNTIME_SCANOUT_V1.md)
@@ -57,8 +60,9 @@ Never force-add a ROM, firmware, save, screenshot, or extracted game asset.
 
 ## Current boundary
 
-Sprint 1 adds an opt-in, bounded native Mode-1 scanout recorder and offline
-replay tests against the pinned PPU. Synthetic parity and capture isolation
-are verified for the documented cases. Real-game reconstruction fidelity,
-gameplay parity, Apple Silicon and Unity remain unqualified. The Sprint 0
-synthetic JSON format stays separate from the new runtime binary container.
+Sprint 2 adds precise rejection diagnostics, 40 sprite priority/rotation/limit
+cases, PNG difference reports and private build/capture helpers. Linux synthetic
+parity is verified; real-game reconstruction is blocked here because the
+owner's ROM is on an inaccessible Mac path. Native Apple Silicon qualification
+also awaits hosted-runner availability or a local run. Unity and asset
+cataloguing remain deferred. Runtime v1 and Sprint 0 synthetic JSON stay separate.

@@ -119,3 +119,9 @@ The one-shot adapter logs one outcome and frees its arena. It has no re-arm,
 network queue, continuous capture, or capture-drop history. A multi-capture
 caller of the low-level API owns sequence monotonicity and session identity;
 starting another record is an explicit invalidation of the previous view.
+
+Sprint 2 keeps these bytes unchanged. Rejection diagnostics now retain the
+first failed requirement and its draw-entry/line boundary. Native reconstruction
+distinguishes invalid input from a valid image that differs; the validation CLI
+exports PNG evidence only after complete decoding/replay, with match/mismatch
+reported separately from format integrity.
