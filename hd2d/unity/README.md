@@ -5,9 +5,11 @@ image is only a comparison input. Background textures are decoded from VRAM,
 tilemaps and CGRAM; sprite textures and placement come from OAM. There is no
 ROM access, live connection, simulation, asset catalogue or game-code change.
 
-This prototype has **verified managed-decoder parity on synthetic frames**.
-Unity Editor compilation, package resolution, Metal rendering and private-game
-import still require the owner-run checks below. See the
+This prototype has **verified managed-decoder parity on synthetic frames** and
+owner-observed **Unity Metal baseline parity on a real gameplay capture:
+0/57,344 pixels different**. That local result is separate from cloud CI and
+does not qualify every capture or the lighting experiment. The lighting fix
+and additional GPU tests below still require an owner run. See the
 [Sprint 4 report](../docs/roadmap/SPRINT_4_REPORT.md) for measured results.
 
 ## Open on an Apple Silicon Mac
@@ -16,8 +18,8 @@ import still require the owner-run checks below. See the
    this repository's `hd2d/unity` folder as a project. It is an Editor diagnostic
    prototype; a standalone player is not qualified.
 2. Let Package Manager resolve `Packages/manifest.json`: **URP 17.0.4** and
-   **Unity Test Framework 1.4.6**. Direct versions are pinned; the first actual
-   Unity resolution and its generated transitive lock are still unverified.
+   **Unity Test Framework 1.4.6**. Direct versions are pinned; the owner has
+   confirmed URP 17.0.4 locally, but the resolved transitive lock is not recorded.
    Do not upgrade packages to work around errors without recording the change.
 3. The Editor bootstrap creates a 2D Renderer and URP asset under ignored
    `Assets/LocalGenerated`, selects Gamma color space, disables HDR/MSAA/post
@@ -38,8 +40,8 @@ The existing [interactive capture workflow](../docs/guides/INTERACTIVE_CAPTURE.m
 supplies real captures. It is unchanged. Unity needs the completed capture,
 not the ROM or the native executable. Run the existing
 [`validate_capture.py`](../tools/validate_capture.py) first to establish native
-replay parity independently of this prototype. The owner's earlier successful
-native reconstruction does not establish Unity GPU fidelity.
+replay parity independently of this prototype. Native replay and Unity GPU
+comparison are separate checks, including after an owner-verified Unity frame.
 
 The container reader rejects unknown versions/profiles/engine pins, invalid
 sizes/hashes/register values, missing/reordered lines and invalid memory
@@ -138,12 +140,42 @@ assumed away. GPU tests enforce zero differences, with no tolerance threshold.
 
 ## Isolated normal-map experiment
 
-**Light this piece in experiment** copies the selected slot's raw graphics into
-the second camera's layer. A procedural rounded normal map is attached as the
-sprite's `_NormalMap` secondary texture, with URP's Sprite-Lit material and a
-moving `Light2D` configured to use accurate normal mapping. The normal map is
-an experiment, not an inferred original game asset. Desktop normal packing is
-used; mobile normal encodings have not been qualified.
+Selecting an OAM root or its decoded/wrapped child in the Hierarchy updates the
+graphics inspector's OAM slot. **Light this piece in experiment** copies that
+slot's raw graphics into the second view. The experiment label identifies its
+currently rendered slot separately from the inspector selection. Its sprite is
+centered and fitted within the viewport, regardless of the original OAM position.
+
+Use **Experiment stage** in this order to isolate a black view:
+
+1. **Unlit** — built-in unlit material, no experiment light. Confirms source
+   pixels, geometry, camera and target visibility.
+2. **Global Light** — built-in lit material and one Global Light2D, no normals.
+   Confirms the 2D renderer and target sorting layer.
+3. **Point Light** — built-in lit material and one moving Point Light2D, no normals.
+   Confirms the light mesh, camera depth and spatial illumination.
+4. **Normal Map** — the point light plus the procedural `_NormalMap` secondary
+   texture and accurate normal mapping. Only this stage uses a treatment's
+   optional custom material.
+
+Both sprite and light are on **GameObject layer 9**, visible only to the
+experimental camera. The sprite uses sorting layer **Default**, which is
+explicitly assigned to the light's **Target Sorting Layers** before activation.
+GameObject layers and sorting layers serve different purposes. The light mesh
+stays at Z=0, in front of the camera at Z=-10; URP's separate normal-map distance
+sets the virtual lighting height. Moving the mesh to Z=-30 puts it behind the
+camera and can clip its illumination entirely.
+
+The window reports opaque source pixels and actual GPU nonblack-pixel counts.
+Warnings identify fully transparent/black source pixels, missing/disabled
+lights, excluded sorting layers, wrong layer/culling masks, offscreen geometry,
+invalid render targets and black GPU output despite nonblack source pixels.
+An experimental failure hides its stale view and leaves baseline rendering and
+comparison export available. Readback at the diagnostic window's 10 Hz refresh
+is for inspection, not a continuous-playback performance claim.
+
+The normal map is an experiment, not an inferred original game asset. Desktop
+normal packing is used; mobile normal encodings have not been qualified.
 
 Optionally create **Assets → Create → X2 HD-2D → Capture-local treatment** under
 `Assets/LocalGenerated`, then assign it to the scene root's `treatment` field
@@ -194,10 +226,13 @@ export X2_HD2D_FIXTURES="$PWD/hd2d/local/unity-fixtures"
   -logFile "$PWD/hd2d/local/unity-tests.log"
 ```
 
-All four EditMode tests must pass: managed fixture parity, explicit raster
-limitations, GPU parity for every static fixture, and independent objects/
-visibility/enhancement isolation. Missing fixtures or a null graphics device
-fail explicitly. In an empty diagnostic scene, the Editor Test Runner can also
+All seven EditMode tests must pass: managed fixture parity, explicit raster
+limitations, GPU parity for every static fixture, independent objects/visibility,
+nonblack experimental GPU output through all four lighting stages, diagnostics
+and baseline isolation during injected experimental failures, and Hierarchy OAM
+selection mapping. The lighting test uses a known visible original synthetic
+sprite and checks exact baseline pixels after every stage. Missing fixtures or
+a null graphics device fail explicitly. In an empty diagnostic scene, the Editor Test Runner can also
 run the `Managed` and `Graphics` categories. Do not run graphics tests alongside
 an already imported private scene: the prototype reserves Unity layers 8 and 9.
 

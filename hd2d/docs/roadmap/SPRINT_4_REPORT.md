@@ -4,14 +4,16 @@ Date: 2026-11-17. Canonical fork: `nkanhai/MegaManX2GraphicsUpgrade`.
 Branch: `feature/hd2d-sprint-4`, based on merged `master`
 `c464b91b85daf435405d0123519a2e9aa7f7aa7c` (Sprint 3 PR #4).
 
-**Implemented, pending Unity/Mac qualification.** The independent managed
+**Baseline qualified on one owner-observed real gameplay frame; lighting
+follow-up pending Mac confirmation.** The independent managed
 decoder reconstructs all 57,344 pixels exactly in eighteen original synthetic
 static captures. The Unity project contains the importer, diagnostic scene,
 component quads, source inspection, GPU comparison export and isolated lighting
-experiment. This cloud environment has no Unity Editor, so Editor compilation,
-Package Manager resolution, actual URP/Metal output and owner private-gameplay
-acceptance have not been verified. Native owner-observed success from prior
-sprints is separate evidence and is not being extended to Unity by inference.
+experiment. The owner has now confirmed Unity Metal baseline reconstruction at
+**0/57,344 differing pixels** on a real gameplay capture, using Unity 6000.0.62f1
+and URP 17.0.4 on Apple Silicon. The experimental lit view was black, prompting
+the correction below. This is owner-observed local evidence; this cloud
+environment still has no Unity Editor and does not claim GPU test execution.
 
 ## Implementation
 
@@ -71,8 +73,9 @@ graphics; no ROM or game-derived capture was accessed or downloaded.
 | Existing native CTest suite | **6/6 groups PASS**, including on/off isolation, file validation and interactive requests |
 | Focused pinned upstream checks | Raster snapshot, render workers and all six PPU test executables PASS |
 | Recursive dependency verification | All five revisions match `upstream-lock.json`; sources unchanged |
-| Unity EditMode tests (4), URP rendering, normal-map appearance | **NOT RUN**: no Unity Editor/graphics qualification environment |
-| Real gameplay capture inside Unity on Apple Silicon | **NOT RUN**: owner-private capture/Unity environment unavailable here |
+| Unity EditMode suite (now 7 tests) | **NOT RUN here**: no Unity Editor/graphics qualification environment |
+| Real gameplay baseline inside Unity Metal on Apple Silicon | **OWNER-OBSERVED PASS: 0/57,344 differing pixels on one real gameplay capture**, separate from cloud CI |
+| Normal-map/Light2D experiment | Owner reported black output; correction below awaits local GPU confirmation |
 
 The native oracle generates reference pixels; the C# algorithm does not call
 the native renderer and never consumes reference pixels during reconstruction.
@@ -114,8 +117,49 @@ Unity 6/URP source inspection also checked Light2D normal-map fields and point
 light setters, camera configuration, render-request APIs, pipeline creation and
 the secondary-texture `Sprite.Create` overload; no additional definite API
 mismatch was found. Assembly JSON/reference checks and all 23 Python tests pass.
-This corrects the identified assembly dependency; successful Editor recompilation
-and GPU qualification still require the owner's next local run.
+This corrected the identified assembly dependency. The owner's subsequent
+working baseline demonstrates successful local compilation/rendering; lighting
+requires the separate follow-up below.
+
+## Black experimental view follow-up
+
+The old point light was placed at Z=-30 while both diagnostic cameras are at
+Z=-10 looking toward the sprites at Z=0. URP's `Light2D.GetMatrix()` retains
+that world-space Z, and its point-light vertex path uses
+`TransformObjectToHClip`; the mesh can therefore be clipped behind the camera.
+Normal-map height is a separate `normalMapDistance` value, not a reason to move
+the light mesh behind the camera. The correction keeps the mesh at Z=0 and
+uses a normal-map distance of 30. This is a source-backed diagnosis; post-fix
+Metal output has not yet been observed here or reported by the owner.
+
+Dynamic lights now explicitly target sorting layer Default before activation,
+matching the experimental sprite. This removes reliance on URP Awake/Reset
+defaults; the owner's actual previous target-layer list was not available.
+Both sprite and light remain on GameObject layer 9, and the experimental camera
+still culls only layer 9. The sprite is centered and fitted within its viewport.
+The baseline decoder, geometry, textures, materials, sorting and camera setup
+are unchanged. Experimental setup/render failures are reported separately so
+they cannot prevent a valid baseline comparison export.
+
+The graphics inspector now provides Unlit, Global Light, Point Light and Normal
+Map stages, with the custom material override confined to the final stage.
+It shows source opacity and actual GPU nonblack-pixel counts, with diagnostics
+for missing/disabled lights, excluded target sorting layers, wrong GameObject
+layers/culling masks, offscreen geometry, invalid/released targets, black tint
+or source colors, and black GPU output. OAM roots and child selections in the
+Hierarchy synchronize to the inspector; an explicit button applies the selected
+piece to the experiment and its label identifies the currently rendered slot.
+
+Three additional Unity tests require nonblack experimental GPU output for known
+visible synthetic slot 0 through all four stages, verify exact baseline pixels
+after every stage and during injected failures, check fault diagnostics, and
+check Hierarchy selection mapping. The test assembly now directly references
+URP's 2D runtime because it inspects Light2D state. The seven-test Unity suite
+must run on the owner's graphics device; it was **not executed in cloud**.
+For this follow-up, all 23 Python tests and 104 managed assertions passed
+(18 synthetic frames still have zero differences). A Roslyn C# 9 syntax parse
+of all ten Unity C# files and assembly JSON validation passed; syntax parsing
+does not establish Unity API binding or successful Editor compilation.
 
 ## Limitations and remaining acceptance work
 
@@ -127,18 +171,17 @@ size modes 6/7 use the pinned square approximation for inspection only. Other
 display modes/mosaic/SETINI features are rejected entirely. Detection is
 conservative and can flag changes to unused memory as incomplete.
 
-The owner must open the project in the pinned Apple Silicon Editor, resolve
-packages and pass all four EditMode tests with a real graphics device. Then
-privately import a gameplay capture, toggle BG/OAM groups, inspect an individual
-piece, apply its isolated treatment and export comparisons. Record the Editor,
-package resolution, Metal device and GPU/managed counts. Keep the capture,
+The owner should rerun the seven EditMode tests with a real graphics device and
+inspect the same visible piece through all four experimental stages, then
+re-export the already qualified gameplay baseline to check isolation. Record
+the Editor, package resolution, Metal device and GPU/managed counts. Keep the capture,
 screenshots and comparison directory private. If the frame has unsupported
 effects, record its exact diagnostics and selected line rather than claiming
-full-frame parity. Qualifying a supported real frame is still required before
-calling Unity fidelity verified.
+full-frame parity. The owner's successful baseline result qualifies that frame;
+it does not establish whole-game fidelity or successful experimental lighting.
 
-Unity setup/API compatibility, pixel alignment/color handling on Metal and the
-normal-map experiment remain risks until those tests run. The prototype is an
+The new lighting code/API compatibility and normal-map output remain risks
+until the follow-up tests run. The prototype is an
 Editor tool, reserves layers 8/9, decodes one viewport at a time and has no
 performance qualification for continuous playback. Manually hiding an OAM slot
 does not recompute ownership masks. Generated resources are discarded on reload;

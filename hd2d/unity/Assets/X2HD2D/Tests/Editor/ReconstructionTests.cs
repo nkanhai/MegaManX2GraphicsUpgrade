@@ -104,5 +104,100 @@ namespace X2HD2D.Tests
                 scene.Load(capture); Assert.That(scene.ObjectRoots.Length, Is.EqualTo(128), "Reload replaces objects");
             } finally { Object.DestroyImmediate(root); }
         }
+
+        [UnityTest, Category("Graphics")]
+        public IEnumerator VisibleSyntheticSpriteRendersThroughAllLightingStages()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType, Is.Not.EqualTo(GraphicsDeviceType.Null));
+            ProjectSetup.Ensure();
+            var root = new GameObject("Synthetic lighting stages") { hideFlags = HideFlags.DontSave };
+            var scene = root.AddComponent<CaptureScene>();
+            try {
+                var capture = Fixture("static8"); scene.Load(capture);
+                // Slot 0 is an original, opaque, nonblack synthetic tile, not an
+                // arbitrary first slot whose empty output could make a test pass.
+                Assert.That(CaptureScene.CountNonblackPixels(scene.Frame.Pieces[0].RawRgba), Is.GreaterThan(0));
+                foreach (ExperimentStage stage in Enum.GetValues(typeof(ExperimentStage))) {
+                    scene.BuildExperiment(0, stage);
+                    EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                    EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                    Assert.That(scene.ExperimentError, Is.Null, stage.ToString());
+                    Assert.That(scene.ExperimentCamera.cullingMask, Is.EqualTo(1 << CaptureScene.ExperimentLayer));
+                    Assert.That(scene.ExperimentSprite.gameObject.layer, Is.EqualTo(CaptureScene.ExperimentLayer));
+                    Assert.That(scene.ExperimentSprite.sortingLayerID, Is.EqualTo(SortingLayer.NameToID("Default")));
+                    if (stage == ExperimentStage.Unlit) Assert.That(scene.ExperimentLight, Is.Null);
+                    else {
+                        Assert.That(scene.ExperimentLight.isActiveAndEnabled, Is.True);
+                        Assert.That(scene.ExperimentLight.gameObject.layer, Is.EqualTo(CaptureScene.ExperimentLayer));
+                        var targets = new SerializedObject(scene.ExperimentLight).FindProperty("m_ApplyToSortingLayers");
+                        Assert.That(targets.arraySize, Is.EqualTo(1));
+                        Assert.That(targets.GetArrayElementAtIndex(0).intValue, Is.EqualTo(scene.ExperimentSprite.sortingLayerID));
+                        float depth = scene.ExperimentCamera.WorldToViewportPoint(scene.ExperimentLight.transform.position).z;
+                        Assert.That(depth, Is.InRange(scene.ExperimentCamera.nearClipPlane, scene.ExperimentCamera.farClipPlane));
+                    }
+                    scene.RenderViews();
+                    Assert.That(scene.ExperimentHasRendered, Is.True, string.Join("\n", scene.ExperimentDiagnostics()));
+                    Assert.That(CaptureScene.CountNonblackPixels(CaptureScene.Readback(scene.ExperimentView)), Is.GreaterThan(0),
+                        stage + ": experimental GPU target must contain actual visible sprite pixels");
+                    Assert.That(scene.ExperimentDiagnostics(), Is.Empty, stage.ToString());
+                    CollectionAssert.AreEqual(capture.CopyReferenceRgba(), CaptureScene.Readback(scene.BaselineView), stage + ": baseline isolation");
+                }
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest, Category("Graphics")]
+        public IEnumerator ExperimentFaultsAreDiagnosedWithoutBreakingBaseline()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType, Is.Not.EqualTo(GraphicsDeviceType.Null));
+            ProjectSetup.Ensure();
+            var root = new GameObject("Synthetic lighting diagnostics") { hideFlags = HideFlags.DontSave };
+            var scene = root.AddComponent<CaptureScene>();
+            try {
+                var capture = Fixture("static8"); scene.Load(capture); scene.BuildExperiment(0, ExperimentStage.PointLight);
+                EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                scene.ExperimentLight.enabled = false;
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("No enabled experiment Light2D")), Is.True);
+                scene.ExperimentLight.enabled = true;
+                var lightData = new SerializedObject(scene.ExperimentLight);
+                lightData.FindProperty("m_ApplyToSortingLayers").arraySize = 0; lightData.ApplyModifiedPropertiesWithoutUndo();
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("Target Sorting Layers excludes")), Is.True);
+                scene.ExperimentCamera.cullingMask = 0;
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("culling mask")), Is.True);
+                scene.RenderViews();
+                Assert.That(scene.ExperimentNonblackPixels, Is.Zero, "A zero camera mask must produce a black experimental target");
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("entirely black")), Is.True);
+                CollectionAssert.AreEqual(capture.CopyReferenceRgba(), CaptureScene.Readback(scene.BaselineView));
+                scene.ExperimentCamera.cullingMask = 1 << CaptureScene.ExperimentLayer;
+                scene.ExperimentView.Release();
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("render target")), Is.True);
+                scene.RenderViews();
+                Assert.That(scene.HasRendered, Is.True, "An experimental failure cannot block baseline rendering/export");
+                Assert.That(scene.ExperimentHasRendered, Is.False);
+                CollectionAssert.AreEqual(capture.CopyReferenceRgba(), CaptureScene.Readback(scene.BaselineView));
+                // Fault-inject an empty derived sprite, without altering imported
+                // capture state, to exercise the transparent-source diagnostic.
+                scene.Frame.Pieces[0].RawRgba = new byte[scene.Frame.Pieces[0].RawRgba.Length];
+                scene.BuildExperiment(0, ExperimentStage.Unlit);
+                Assert.That(scene.ExperimentDiagnostics().Any(s => s.Contains("fully transparent")), Is.True);
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest, Category("Graphics")]
+        public IEnumerator HierarchyOamChildrenResolveToTheirSourceSlot()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType, Is.Not.EqualTo(GraphicsDeviceType.Null));
+            ProjectSetup.Ensure();
+            var root = new GameObject("Synthetic OAM selection") { hideFlags = HideFlags.DontSave };
+            var scene = root.AddComponent<CaptureScene>();
+            try {
+                scene.Load(Fixture("static8"));
+                EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                Assert.That(DiagnosticWindow.TryGetOamSelection(scene, scene.ObjectRoots[1].gameObject, out int slot), Is.True);
+                Assert.That(slot, Is.EqualTo(1));
+                Assert.That(DiagnosticWindow.TryGetOamSelection(scene, scene.ObjectRoots[1].GetChild(0).gameObject, out slot), Is.True);
+                Assert.That(slot, Is.EqualTo(1));
+                Assert.That(DiagnosticWindow.TryGetOamSelection(scene, scene.BackgroundRoots[0].gameObject, out slot), Is.False);
+            } finally { Object.DestroyImmediate(root); }
+        }
     }
 }

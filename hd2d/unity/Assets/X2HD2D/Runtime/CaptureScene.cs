@@ -9,6 +9,8 @@ using Object = UnityEngine.Object;
 
 namespace X2HD2D.Unity
 {
+    public enum ExperimentStage { Unlit, GlobalLight, PointLight, NormalMap }
+
     [ExecuteAlways]
     public sealed class CaptureScene : MonoBehaviour
     {
@@ -24,7 +26,16 @@ namespace X2HD2D.Unity
         public CaptureTreatment treatment;
         private readonly List<Object> owned = new List<Object>();
         private readonly List<Object> experimentOwned = new List<Object>();
-        private Light2D movingLight;
+        public Light2D ExperimentLight { get; private set; }
+        public SpriteRenderer ExperimentSprite { get; private set; }
+        public ExperimentStage LightingStage { get; private set; } = ExperimentStage.NormalMap;
+        public int ExperimentSlot { get; private set; } = -1;
+        public int ExperimentOpaquePixels { get; private set; }
+        public int ExperimentNonblackPixels { get; private set; } = -1;
+        public bool ExperimentHasRendered { get; private set; }
+        public string ExperimentError { get; private set; }
+        private int experimentSourceNonblack;
+        private string experimentSetupError;
         public bool HasRendered { get; private set; }
         public bool HasFilters => !ObjectsVisible || BackgroundVisible.Any(v => !v);
 
@@ -43,7 +54,9 @@ namespace X2HD2D.Unity
         public void Clear()
         {
             Release(experimentOwned); Release(owned); Capture = null; Frame = null;
-            movingLight = null; BaselineView = ExperimentView = null; ReferenceView = null; HasRendered = false;
+            ExperimentLight = null; ExperimentSprite = null; ExperimentSlot = -1;
+            ExperimentError = experimentSetupError = null; ExperimentHasRendered = false; ExperimentNonblackPixels = -1;
+            BaselineView = ExperimentView = null; ReferenceView = null; HasRendered = false;
         }
         private void OnDisable() => Clear();
 
@@ -136,60 +149,157 @@ namespace X2HD2D.Unity
             for (int i = 0; i < 3; i++) BackgroundRoots[i].gameObject.SetActive(BackgroundVisible[i]);
             foreach (var root in ObjectRoots) root.parent.gameObject.SetActive(ObjectsVisible);
         }
-        public void BuildExperiment(int selectedSlot = -1)
+        public void BuildExperiment(int selectedSlot = -1, ExperimentStage stage = ExperimentStage.NormalMap)
         {
-            Release(experimentOwned); movingLight = null;
+            Release(experimentOwned); ExperimentLight = null; ExperimentSprite = null;
+            ExperimentError = experimentSetupError = null; ExperimentHasRendered = false; ExperimentNonblackPixels = -1;
+            ExperimentOpaquePixels = experimentSourceNonblack = 0; ExperimentSlot = -1; LightingStage = stage;
             if (Frame == null) return;
             int slot = selectedSlot >= 0 ? selectedSlot : treatment ? treatment.oamSlot : Frame.Pieces.FirstOrDefault(p => p.RawRgba.Where((b, i) => i % 4 == 3).Any(b => b != 0))?.Slot ?? 0;
-            var piece = Frame.Pieces[Mathf.Clamp(slot, 0, 127)];
-            float strength = treatment ? treatment.normalStrength : 0.7f;
-            byte[] normals = new byte[piece.Size * piece.Size * 4];
-            for (int y = 0; y < piece.Size; y++) for (int x = 0; x < piece.Size; x++)
-            {
-                Vector3 n = new Vector3((x / (float)(piece.Size - 1) - 0.5f) * strength, (0.5f - y / (float)(piece.Size - 1)) * strength, 1).normalized;
-                int p = (y * piece.Size + x) * 4;
-                normals[p] = (byte)((n.x * 0.5f + 0.5f) * 255); normals[p + 1] = (byte)((n.y * 0.5f + 0.5f) * 255);
-                normals[p + 2] = (byte)((n.z * 0.5f + 0.5f) * 255); normals[p + 3] = 255;
+            ExperimentSlot = Mathf.Clamp(slot, 0, 127);
+            var piece = Frame.Pieces[ExperimentSlot];
+            for (int p = 0; p < piece.RawRgba.Length; p += 4) if (piece.RawRgba[p + 3] != 0) {
+                ExperimentOpaquePixels++;
+                if (piece.RawRgba[p] != 0 || piece.RawRgba[p + 1] != 0 || piece.RawRgba[p + 2] != 0) experimentSourceNonblack++;
             }
-            var normal = Own(Texture(normals, piece.Size, piece.Size), true);
-            var lit = treatment && treatment.enhancementMaterial ? Own(new Material(treatment.enhancementMaterial), true) : Material("Universal Render Pipeline/2D/Sprite-Lit-Default", true);
-            lit.SetTexture("_NormalMap", normal);
-            var quad = Quad("EXPERIMENT ONLY - OAM " + slot + " procedural normal", transform, ExperimentLayer, piece.RawRgba, piece.Size, piece.Size,
-                96, 80, 0, lit, true, normal);
-            quad.transform.localScale = Vector3.one * (treatment ? treatment.scale : 4);
-            quad.color = treatment ? treatment.tint : Color.white;
-            movingLight = Node("Dynamic 2D normal light (experiment only)", transform, ExperimentLayer, true).AddComponent<Light2D>();
-            movingLight.lightType = Light2D.LightType.Point; movingLight.intensity = 1.5f;
-            movingLight.pointLightOuterRadius = 150; movingLight.pointLightInnerRadius = 20;
-            movingLight.color = new Color(1, 0.85f, 0.65f);
+            try { BuildExperimentObjects(piece, stage); }
+            catch (Exception e) { ExperimentError = experimentSetupError = "Experiment setup: " + e.Message; }
+            // URP updates its dynamic light mesh/bounds in LateUpdate, including Edit mode.
 #if UNITY_EDITOR
-            // URP 17 exposes normal settings as getters; configure its serialized fields.
-            var serialized = new UnityEditor.SerializedObject(movingLight);
-            serialized.FindProperty("m_NormalMapQuality").intValue = (int)Light2D.NormalMapQuality.Accurate;
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+#endif
+        }
+        private void BuildExperimentObjects(OamPiece piece, ExperimentStage stage)
+        {
+            float strength = treatment ? treatment.normalStrength : 0.7f;
+            Texture2D normal = null;
+            if (stage == ExperimentStage.NormalMap) {
+                byte[] normals = new byte[piece.Size * piece.Size * 4];
+                for (int y = 0; y < piece.Size; y++) for (int x = 0; x < piece.Size; x++) {
+                    Vector3 n = new Vector3((x / (float)(piece.Size - 1) - 0.5f) * strength, (0.5f - y / (float)(piece.Size - 1)) * strength, 1).normalized;
+                    int p = (y * piece.Size + x) * 4;
+                    normals[p] = (byte)((n.x * 0.5f + 0.5f) * 255); normals[p + 1] = (byte)((n.y * 0.5f + 0.5f) * 255);
+                    normals[p + 2] = (byte)((n.z * 0.5f + 0.5f) * 255); normals[p + 3] = 255;
+                }
+                normal = Own(Texture(normals, piece.Size, piece.Size), true);
+            }
+            var material = stage == ExperimentStage.NormalMap && treatment && treatment.enhancementMaterial
+                ? Own(new Material(treatment.enhancementMaterial), true)
+                : Material(stage == ExperimentStage.Unlit ? "Universal Render Pipeline/2D/Sprite-Unlit-Default" : "Universal Render Pipeline/2D/Sprite-Lit-Default", true);
+            if (normal) material.SetTexture("_NormalMap", normal);
+            float scale = Mathf.Clamp(treatment ? treatment.scale : 4, 1, 192f / piece.Size);
+            var quad = ExperimentSprite = Quad("EXPERIMENT ONLY - OAM " + piece.Slot + " - " + stage, transform, ExperimentLayer,
+                piece.RawRgba, piece.Size, piece.Size, 128 - piece.Size * scale / 2, 112 - piece.Size * scale / 2, 0, material, true, normal);
+            quad.sortingLayerID = SortingLayer.NameToID("Default");
+            quad.transform.localScale = Vector3.one * scale;
+            quad.color = treatment ? treatment.tint : Color.white;
+            if (stage == ExperimentStage.Unlit) return;
+            var node = Node("2D diagnostic light (experiment only)", transform, ExperimentLayer, true);
+            node.SetActive(false); // Set targets before OnEnable registers a global/point light.
+            ExperimentLight = node.AddComponent<Light2D>();
+            ExperimentLight.lightType = stage == ExperimentStage.GlobalLight ? Light2D.LightType.Global : Light2D.LightType.Point;
+            ExperimentLight.blendStyleIndex = 0; ExperimentLight.intensity = 1.5f;
+            ExperimentLight.pointLightOuterRadius = 200; ExperimentLight.pointLightInnerRadius = 100;
+            ExperimentLight.color = Color.white;
+            // Keep the light MESH in the sprite plane, inside the camera frustum.
+            // normalMapDistance supplies the virtual normal-light height; Z=-30
+            // puts the mesh behind our camera at Z=-10 and can clip all lighting.
+            node.transform.localPosition = new Vector3(128, -112, 0);
+#if UNITY_EDITOR
+            // Stable serialized contract used by URP 17's own Light2D inspector.
+            // Do not rely on Awake/Reset populating dynamically created targets.
+            var serialized = new UnityEditor.SerializedObject(ExperimentLight);
+            var targets = serialized.FindProperty("m_ApplyToSortingLayers");
+            if (targets == null) throw new InvalidOperationException("URP Light2D Target Sorting Layers property is missing");
+            targets.arraySize = 1; targets.GetArrayElementAtIndex(0).intValue = quad.sortingLayerID;
+            serialized.FindProperty("m_NormalMapQuality").intValue = (int)(stage == ExperimentStage.NormalMap ? Light2D.NormalMapQuality.Accurate : Light2D.NormalMapQuality.Disabled);
             serialized.FindProperty("m_NormalMapDistance").floatValue = 30;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+#else
+            throw new NotSupportedException("Lighting experiment requires the qualified Editor setup path");
 #endif
+            node.SetActive(true);
+        }
+        public string[] ExperimentDiagnostics()
+        {
+            var issues = new List<string>();
+            if (ExperimentError != null) issues.Add(ExperimentError);
+            if (ExperimentOpaquePixels == 0) issues.Add("Source OAM " + ExperimentSlot + " is fully transparent; choose a visible source piece.");
+            else if (experimentSourceNonblack == 0) issues.Add("Source pixels are opaque black (palette/brightness); nonblack output is not expected.");
+            if (!ExperimentCamera || !ExperimentCamera.gameObject.activeInHierarchy) issues.Add("Experiment camera is missing or inactive.");
+            if (!ExperimentView || !ExperimentView.IsCreated() || ExperimentView.width != 256 || ExperimentView.height != 224)
+                issues.Add("Experiment render target is missing, released or not 256x224.");
+            if (ExperimentCamera && ExperimentCamera.targetTexture != ExperimentView) issues.Add("Experiment camera has an incorrect render target binding.");
+            if (ExperimentCamera && ExperimentCamera.cullingMask != (1 << ExperimentLayer)) issues.Add("Experiment culling mask must contain only GameObject layer 9.");
+            if (!ExperimentSprite || !ExperimentSprite.enabled || !ExperimentSprite.gameObject.activeInHierarchy) issues.Add("Experiment sprite is missing or disabled.");
+            else {
+                if (ExperimentSprite.gameObject.layer != ExperimentLayer) issues.Add("Experiment sprite is not on GameObject layer 9.");
+                if (ExperimentCamera && !GeometryUtility.TestPlanesAABB(GeometryUtility.CalculateFrustumPlanes(ExperimentCamera), ExperimentSprite.bounds)) issues.Add("Experiment sprite is outside the camera frustum.");
+                Color tint = ExperimentSprite.color;
+                if (tint.a <= 0 || (tint.r <= 0 && tint.g <= 0 && tint.b <= 0)) issues.Add("Experiment tint is transparent or black.");
+                if (!ExperimentSprite.sharedMaterial || !ExperimentSprite.sharedMaterial.shader || !ExperimentSprite.sharedMaterial.shader.isSupported) issues.Add("Experiment material/shader is missing or unsupported.");
+            }
+            if (LightingStage != ExperimentStage.Unlit) {
+                if (!ExperimentLight || !ExperimentLight.isActiveAndEnabled) issues.Add("No enabled experiment Light2D; lit sprites need a light.");
+                else {
+                    if (ExperimentLight.gameObject.layer != ExperimentLayer) issues.Add("Experiment Light2D is not on GameObject layer 9.");
+                    if (ExperimentLight.intensity <= 0) issues.Add("Experiment Light2D intensity is zero.");
+#if UNITY_EDITOR
+                    var targets = new UnityEditor.SerializedObject(ExperimentLight).FindProperty("m_ApplyToSortingLayers");
+                    bool targetsSprite = false;
+                    if (targets != null && ExperimentSprite) for (int i = 0; i < targets.arraySize; i++) targetsSprite |= targets.GetArrayElementAtIndex(i).intValue == ExperimentSprite.sortingLayerID;
+                    if (!targetsSprite) issues.Add("Light2D Target Sorting Layers excludes the sprite's sorting layer (expected Default).");
+#endif
+                    if (ExperimentCamera && ExperimentLight.lightType != Light2D.LightType.Global) {
+                        float depth = ExperimentCamera.WorldToViewportPoint(ExperimentLight.transform.position).z;
+                        if (depth < ExperimentCamera.nearClipPlane || depth > ExperimentCamera.farClipPlane) issues.Add("Point-light mesh lies outside the camera depth range.");
+                    }
+                }
+            }
+            if (ExperimentHasRendered && ExperimentNonblackPixels == 0 && experimentSourceNonblack > 0)
+                issues.Add("Experiment GPU output is entirely black despite nonblack source pixels. Check the four lighting stages in order.");
+            return issues.ToArray();
+        }
+        public static int CountNonblackPixels(byte[] rgba)
+        {
+            int count = 0;
+            for (int p = 0; p < rgba.Length; p += 4) if (rgba[p + 3] != 0 && (rgba[p] != 0 || rgba[p + 1] != 0 || rgba[p + 2] != 0)) count++;
+            return count;
         }
         public void RenderViews()
         {
             HasRendered = false;
             if (!BaselineCamera || GraphicsSettings.currentRenderPipeline == null)
                 throw new InvalidOperationException("No active capture/URP pipeline. Initialize diagnostic URP settings and allow the Editor to repaint.");
-            var request = new UniversalRenderPipeline.SingleCameraRequest { destination = BaselineView };
-            if (!RenderPipeline.SupportsRenderRequest(BaselineCamera, request))
+            SubmitView(BaselineCamera, BaselineView);
+            HasRendered = true;
+            // Experiment failures must not invalidate a faithful baseline export.
+            ExperimentHasRendered = false; ExperimentNonblackPixels = -1; ExperimentError = experimentSetupError;
+            if (experimentSetupError != null) return;
+            try {
+                if (ExperimentLight && ExperimentLight.lightType == Light2D.LightType.Point)
+                    ExperimentLight.transform.localPosition = new Vector3(128 + Mathf.Sin(Time.realtimeSinceStartup) * 32, -112 + Mathf.Cos(Time.realtimeSinceStartup) * 24, 0);
+                SubmitView(ExperimentCamera, ExperimentView);
+                ExperimentNonblackPixels = CountNonblackPixels(Readback(ExperimentView));
+                ExperimentHasRendered = true;
+            } catch (Exception e) { ExperimentError = "Experiment rendering: " + e.Message; }
+        }
+        private static void SubmitView(Camera camera, RenderTexture target)
+        {
+            if (!camera || !camera.gameObject.activeInHierarchy || !target || !target.IsCreated() || target.width != 256 || target.height != 224 || camera.targetTexture != target)
+                throw new InvalidOperationException("Missing/inactive camera or invalid 256x224 render target/binding");
+            var request = new UniversalRenderPipeline.SingleCameraRequest { destination = target };
+            if (!RenderPipeline.SupportsRenderRequest(camera, request))
                 throw new InvalidOperationException("Active render pipeline does not support the URP single-camera request");
-            if (movingLight) movingLight.transform.localPosition = new Vector3(128 + Mathf.Sin(Time.realtimeSinceStartup) * 60, -100 + Mathf.Cos(Time.realtimeSinceStartup) * 35, -30);
             string failure = null;
             Application.LogCallback onLog = (message, trace, type) => {
                 if (type == LogType.Error || type == LogType.Exception || type == LogType.Assert) failure = message;
             };
             Application.logMessageReceived += onLog;
             try {
-                RenderPipeline.SubmitRenderRequest(BaselineCamera, request);
-                RenderPipeline.SubmitRenderRequest(ExperimentCamera, new UniversalRenderPipeline.SingleCameraRequest { destination = ExperimentView });
+                RenderPipeline.SubmitRenderRequest(camera, request);
             } finally { Application.logMessageReceived -= onLog; }
             if (failure != null) throw new InvalidOperationException("Unity rendering reported: " + failure);
-            HasRendered = true;
         }
         public static byte[] Readback(RenderTexture view)
         {

@@ -72,6 +72,8 @@ automated SDL/native isolation tests. Two interactive gameplay captures still
 need owner qualification on the Mac. Sprint 4 adds an offline Unity component
 inspector, a strict C# runtime-v1 reader, independently decoded BG/OAM graphics
 and an isolated normal-map experiment. Managed reconstruction matches eighteen
-original synthetic frames exactly; Unity Editor/GPU and private gameplay import
-still need owner qualification. Live integration and asset cataloguing remain
+original synthetic frames exactly. The owner has also verified a real gameplay
+capture in Unity Metal at 0/57,344 differing pixels. The separate lighting
+experiment fix and additional GPU tests still need owner qualification.
+Live integration and asset cataloguing remain
 deferred. Runtime v1 and Sprint 0 synthetic JSON stay separate.

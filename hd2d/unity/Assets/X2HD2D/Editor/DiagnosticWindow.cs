@@ -18,8 +18,24 @@ namespace X2HD2D.Editor
         private Texture2D tilePreview;
         [MenuItem("X2 HD-2D/Graphics inspector")]
         public static void Open() => GetWindow<DiagnosticWindow>("X2 Graphics");
-        private void OnEnable() => EditorApplication.update += Tick;
-        private void OnDisable() { EditorApplication.update -= Tick; if (tilePreview) DestroyImmediate(tilePreview); }
+        private ExperimentStage stage = ExperimentStage.NormalMap;
+        private void OnEnable() { EditorApplication.update += Tick; Selection.selectionChanged += SyncHierarchySelection; }
+        private void OnDisable() { EditorApplication.update -= Tick; Selection.selectionChanged -= SyncHierarchySelection; if (tilePreview) DestroyImmediate(tilePreview); }
+        public static bool TryGetOamSelection(CaptureScene target, GameObject selected, out int selectedSlot)
+        {
+            selectedSlot = -1;
+            if (!target || target.Frame == null || target.ObjectRoots == null || !selected) return false;
+            // Selecting either the OAM root or its decoded/wrapped child works.
+            var source = selected.GetComponentInParent<GraphicsSource>(true);
+            if (!source || source.componentKind != "OAM piece" || source.sourceIndex < 0 || source.sourceIndex >= 128 ||
+                source.transform != target.ObjectRoots[source.sourceIndex]) return false;
+            selectedSlot = source.sourceIndex; return true;
+        }
+        private void SyncHierarchySelection()
+        {
+            if (!scene) scene = FindAnyObjectByType<CaptureScene>();
+            if (TryGetOamSelection(scene, Selection.activeGameObject, out int selected)) { slot = selected; Repaint(); }
+        }
         private void Tick()
         {
             if (!scene) scene = FindAnyObjectByType<CaptureScene>();
@@ -33,7 +49,7 @@ namespace X2HD2D.Editor
         {
             string path = EditorUtility.OpenFilePanel("Read private runtime .x2scan (not copied into Assets)", "", "x2scan");
             if (string.IsNullOrEmpty(path)) return;
-            try { var capture = ScanoutReader.ReadFile(path); scene.Load(capture); line = 1; sourceName = Path.GetFileName(path); error = null; }
+            try { var capture = ScanoutReader.ReadFile(path); scene.Load(capture); line = 1; slot = scene.ExperimentSlot; stage = scene.LightingStage; sourceName = Path.GetFileName(path); error = null; }
             catch (Exception e) { error = e.Message; }
         }
         private static void View(string title, Texture image, float width)
@@ -56,7 +72,7 @@ namespace X2HD2D.Editor
             if (!scene.Frame.IsSupported) EditorGUILayout.HelpBox("INCOMPLETE — selected-state component inspection, not full-frame reconstruction.\n" + string.Join("\n", scene.Frame.UnsupportedReasons), MessageType.Warning);
             else EditorGUILayout.HelpBox("Supported static Mode-1 profile. Use Export comparison to measure Unity GPU fidelity; supported does not mean already verified.", MessageType.Info);
             int selected = EditorGUILayout.IntSlider("State before scanline", line, 1, 224);
-            if (selected != line) { line = selected; scene.Load(scene.Capture, line); }
+            if (selected != line) { line = selected; scene.Load(scene.Capture, line); slot = scene.ExperimentSlot; stage = scene.LightingStage; }
             EditorGUILayout.BeginHorizontal();
             for (int i = 0; i < 3; i++) scene.BackgroundVisible[i] = GUILayout.Toggle(scene.BackgroundVisible[i], "BG" + (i + 1));
             scene.ObjectsVisible = GUILayout.Toggle(scene.ObjectsVisible, "OAM"); scene.ApplyVisibility();
@@ -66,8 +82,10 @@ namespace X2HD2D.Editor
             EditorGUILayout.BeginHorizontal();
             View("Original reference", scene.ReferenceView, width);
             View("Unity components (unlit)", scene.BaselineView, width);
-            View("EXPERIMENT — normal + Light2D", scene.ExperimentView, width);
+            View("EXPERIMENT — " + scene.LightingStage, scene.ExperimentHasRendered ? scene.ExperimentView : null, width);
             EditorGUILayout.EndHorizontal();
+            GUILayout.Label($"Experiment OAM {scene.ExperimentSlot}: {scene.ExperimentOpaquePixels} opaque source pixels; GPU nonblack pixels: {(scene.ExperimentHasRendered ? scene.ExperimentNonblackPixels.ToString() : "not rendered")}");
+            foreach (string issue in scene.ExperimentDiagnostics()) EditorGUILayout.HelpBox(issue, MessageType.Warning);
             if (GUILayout.Button("Export private GPU/reference/component comparison"))
                 try { string output = ComparisonExport.Export(scene); EditorUtility.RevealInFinder(output); }
                 catch (Exception e) { error = e.Message; }
@@ -91,10 +109,14 @@ namespace X2HD2D.Editor
             slot = EditorGUILayout.IntSlider("OAM hardware slot", slot, 0, 127);
             var piece = scene.Frame.Pieces[slot];
             EditorGUILayout.SelectableLabel($"slot {slot}, evaluation rank {piece.EvaluationOrder}, XY {piece.X},{piece.Y}, {piece.Size}×{piece.Size}, tile {piece.TileNumber}, palette {piece.Palette}, priority {piece.Priority}, flip {piece.FlipX}/{piece.FlipY}\nHardware graphics piece only; no gameplay entity identity is inferred.", GUILayout.Height(40));
+            GUILayout.Label("Diagnose in order: Unlit → Global Light → Point Light → Normal Map");
+            var nextStage = (ExperimentStage)EditorGUILayout.EnumPopup("Experiment stage", stage);
+            if (nextStage != stage) { stage = nextStage; scene.BuildExperiment(slot, stage); }
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Select piece in Hierarchy")) Selection.activeGameObject = scene.ObjectRoots[slot].gameObject;
-            if (GUILayout.Button("Light this piece in experiment")) scene.BuildExperiment(slot);
+            if (GUILayout.Button("Light this piece in experiment")) scene.BuildExperiment(slot, stage);
             EditorGUILayout.EndHorizontal();
+            EditorGUILayout.HelpBox("Hierarchy selection updates the OAM inspector; click Light this piece to apply it. The experiment OAM label identifies the piece currently rendered. Unlit/Global/Point stages use built-in materials; a treatment material override is used only in Normal Map.", MessageType.Info);
             EditorGUILayout.EndScrollView();
         }
     }
