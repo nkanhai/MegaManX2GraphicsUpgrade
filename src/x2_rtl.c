@@ -13,6 +13,7 @@
  */
 #include "x2_rtl.h"
 #include "mmx_replay.h"
+#include "../hd2d/bridge/x2_adapter.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -750,15 +751,18 @@ void X2DrawPpuFrame(void) {
   /* Presentation only. IRQs are serviced inside RunOneFrameOfGame while the
    * bridge advances the beam — never mutate g_cpu here. */
   SimpleHdma hdma_chans[8];
+  hd2d_x2_begin();
   dma_startDma(g_dma, g_snesrecomp_last_hdmaen, true);
   for (int ch = 0; ch < 8; ch++)
     SimpleHdma_Init(&hdma_chans[ch], &g_dma->channel[ch]);
 
   for (int line = 0; line <= 224; line++) {
+    hd2d_x2_line((unsigned)line);
     ppu_runLine(g_ppu, line);
     for (int ch = 0; ch < 8; ch++)
       SimpleHdma_DoLine(&hdma_chans[ch]);
   }
+  hd2d_x2_finish();
 }
 
 /* ── save-state extras: the LLE host cursor ───────────────────────────── */
