@@ -101,6 +101,22 @@ the fixtures, runs the managed suite and Python checks on pushes and PRs.
 Existing native and platform workflows are unchanged. No Unity licence,
 private input or uploaded imagery is required by CI.
 
+## Owner Unity compilation follow-up
+
+The owner began Editor qualification on Apple Silicon with Unity 6000.0.62f1
+and URP 17.0.4 and reported CS0246 for `Light2D` in `CaptureScene.cs`.
+`X2HD2D.Runtime` and `X2HD2D.Editor` now explicitly reference
+`Unity.RenderPipelines.Universal.2D.Runtime`, which supplies `Light2D` and
+`Renderer2DData`. The latter is used by Editor pipeline setup. No package
+versions, rendering algorithms or test-assembly references changed.
+
+Unity 6/URP source inspection also checked Light2D normal-map fields and point
+light setters, camera configuration, render-request APIs, pipeline creation and
+the secondary-texture `Sprite.Create` overload; no additional definite API
+mismatch was found. Assembly JSON/reference checks and all 23 Python tests pass.
+This corrects the identified assembly dependency; successful Editor recompilation
+and GPU qualification still require the owner's next local run.
+
 ## Limitations and remaining acceptance work
 
 The reader's runtime profile is broader than the component renderer's faithful
