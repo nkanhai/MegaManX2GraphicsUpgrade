@@ -1,0 +1,29 @@
+# Generated Editor state and builds
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Bb]uild*/
+/.vs/
+*.csproj
+*.sln
+*.slnx
+*.user
+.DS_Store
+# URP and machine settings are recreated by ProjectSetup.Ensure.
+/Assets/LocalGenerated/
+/Assets/LocalGenerated.meta
+# URP creates these during first pipeline activation.
+/Assets/UniversalRenderPipelineGlobalSettings.asset*
+/Assets/DefaultVolumeProfile.asset*
+/ProjectSettings/*
+!/ProjectSettings/ProjectVersion.txt
+!/ProjectSettings/EditorBuildSettings.asset
+# Keep the Editor's resolved dependency lock local until Unity qualification.
+/Packages/packages-lock.json
+# Captures must be opened outside Assets; this is defense against accidental drag/drop.
+*.x2scan
+*.x2scan.meta
+/Assets/Private/
+/Assets/Private.meta
