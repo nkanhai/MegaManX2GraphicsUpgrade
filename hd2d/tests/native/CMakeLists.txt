@@ -45,15 +45,22 @@ endif()
 # Link the actual title source: unused ROM/CPU sections are discarded. HDMA is
 # deterministic synthetic input here; its real implementation is not replaced
 # in the product. Both enabled and compiled-out title loops are exercised.
-foreach(mode IN ITEMS on off adapter)
+find_package(SDL2 REQUIRED CONFIG)
+add_library(hd2d_test_hotkey STATIC ${BRIDGE}/hotkey.c ${RUNNER}/keybinds.c)
+target_include_directories(hd2d_test_hotkey PUBLIC ${RUNNER} ${BRIDGE})
+target_link_libraries(hd2d_test_hotkey PUBLIC SDL2::SDL2)
+foreach(mode IN ITEMS on off adapter interactive_off)
     add_executable(scanout_${mode} scanout_test.c ${ROOT}/src/x2_rtl.c)
     target_link_libraries(scanout_${mode} PRIVATE hd2d_test_ppu)
-    if(NOT mode STREQUAL "off")
+    if(mode MATCHES "^(on|adapter)$")
         target_compile_definitions(scanout_${mode} PRIVATE HD2D_SCANOUT_CAPTURE=1)
     endif()
-    if(mode STREQUAL "adapter")
-        target_sources(scanout_${mode} PRIVATE ${BRIDGE}/x2_adapter.c)
+    if(mode MATCHES "^(adapter|interactive_off)$")
+        target_link_libraries(scanout_${mode} PRIVATE hd2d_test_hotkey)
         target_compile_definitions(scanout_${mode} PRIVATE TEST_ADAPTER=1)
+        if(mode STREQUAL "adapter")
+            target_sources(scanout_${mode} PRIVATE ${BRIDGE}/x2_adapter.c)
+        endif()
     else()
         add_test(NAME scanout_${mode} COMMAND scanout_${mode})
     endif()
@@ -66,3 +73,10 @@ add_test(NAME scanout_files COMMAND ${Python3_EXECUTABLE}
     $<TARGET_FILE:scanout_off> $<TARGET_FILE:scanout_adapter> $<TARGET_FILE:scanout_replay>)
 add_test(NAME scanout_validation COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_validation.py $<TARGET_FILE:scanout_on> $<TARGET_FILE:scanout_replay>)
+add_executable(hotkey_test hotkey_test.c)
+target_link_libraries(hotkey_test PRIVATE hd2d_test_hotkey)
+add_test(NAME hotkey COMMAND hotkey_test)
+set_tests_properties(hotkey PROPERTIES ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+add_test(NAME scanout_interactive COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_interactive.py $<TARGET_FILE:scanout_adapter>
+    $<TARGET_FILE:scanout_interactive_off> $<TARGET_FILE:scanout_replay>)

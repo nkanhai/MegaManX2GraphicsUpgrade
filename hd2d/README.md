@@ -15,6 +15,8 @@ introduced. Dependency notices and history remain intact.
 
 ## Start here
 
+- [Interactive gameplay capture on macOS](docs/guides/INTERACTIVE_CAPTURE.md)
+- [Sprint 3 report and owner-observed Mac validation](docs/roadmap/SPRINT_3_REPORT.md)
 - [Sprint 2 report and real-game validation blockers](docs/roadmap/SPRINT_2_REPORT.md)
 - [Private ROM-backed build, intro capture and image validation](docs/guides/PRIVATE_CAPTURE_WORKFLOW.md)
 - [Apple Silicon investigation](docs/architecture/MACOS_NATIVE_AUDIT.md)
@@ -60,9 +62,10 @@ Never force-add a ROM, firmware, save, screenshot, or extracted game asset.
 
 ## Current boundary
 
-Sprint 2 adds precise rejection diagnostics, 40 sprite priority/rotation/limit
-cases, PNG difference reports and private build/capture helpers. Linux synthetic
-parity is verified; real-game reconstruction is blocked here because the
-owner's ROM is on an inaccessible Mac path. Native Apple Silicon qualification
-also awaits hosted-runner availability or a local run. Unity and asset
-cataloguing remain deferred. Runtime v1 and Sprint 0 synthetic JSON stay separate.
+The owner reports a successful native ARM64 ROM-backed build, keyboard gameplay
+and a real opening-narrative capture with zero pixel differences. This is local
+owner evidence, separate from cloud CI. Sprint 3 adds an opt-in keyboard trigger
+for sequential captures during normal play, private session directories and
+automated SDL/native isolation tests. Two interactive gameplay captures still
+need owner qualification on the Mac. Unity and asset cataloguing remain deferred.
+Runtime v1 and Sprint 0 synthetic JSON stay separate.

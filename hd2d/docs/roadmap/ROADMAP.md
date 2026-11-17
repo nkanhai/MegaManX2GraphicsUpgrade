@@ -55,6 +55,12 @@ silently move a gitlink to an unpublished submodule commit.
 
 ## Risk register
 
+Sprint 3 adds interactive keyboard capture before Unity work. The owner reports
+a real opening-narrative frame reconstructed exactly on Apple Silicon; the next
+gate is two owner-selected gameplay captures in one session. See
+[Sprint 3 report](SPRINT_3_REPORT.md) and the [interactive guide](../guides/INTERACTIVE_CAPTURE.md).
+This is owner-observed local validation, not a cloud CI claim.
+
 Sprint 2 follows up graphics extraction with real-game qualification before
 starting the Unity milestone. It supplies diagnostic reasons, stronger
 synthetic coverage, private ROM build/capture tooling and image-diff reports.

@@ -4,6 +4,14 @@ Sprint 2, 2026-11-17. Source baseline: fork master `3ecebf8` (merged Sprint 1).
 All dependency pins in `upstream-lock.json` remain unchanged. This is a source
 audit plus explicit qualification gates, not a claim of tested gameplay.
 
+**Subsequent owner evidence (Sprint 3 handover, 2026-11-17):** the owner reports
+exact USA ROM verification, a native ARM64 ROM-backed build, working keyboard
+gameplay, and a draw-1800 opening-narrative capture with 0/57,344 different
+pixels. This resolves the earlier local feasibility question for that setup;
+it is not a cloud CI result or verification of Sprint 3's new shortcut.
+The historical investigation/blockers below remain as recorded. See the
+[Sprint 3 report](../roadmap/SPRINT_3_REPORT.md) for current scope.
+
 ## What the pinned code supports
 
 | Observed source | Implication / limit |
