@@ -61,10 +61,10 @@ execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
     OUTPUT_VARIABLE MMX_REPLAY_ENGINE OUTPUT_STRIP_TRAILING_WHITESPACE)
 set_property(SOURCE src/mmx_replay.c APPEND PROPERTY COMPILE_DEFINITIONS
     MMX_REPLAY_REVISION="${MMX_REPLAY_REVISION}" MMX_REPLAY_ENGINE="${MMX_REPLAY_ENGINE}")
-option(HD2D_SCANOUT_CAPTURE "Opt-in, one-shot HD-2D scanout diagnostic" OFF)
+option(HD2D_SCANOUT_CAPTURE "Opt-in HD-2D scanout diagnostics" OFF)
 if(HD2D_SCANOUT_CAPTURE)
     target_sources(MegaManX2SNESRecomp PRIVATE
-        hd2d/bridge/scanout.c hd2d/bridge/x2_adapter.c)
+        hd2d/bridge/scanout.c hd2d/bridge/x2_adapter.c hd2d/bridge/hotkey.c)
     target_compile_definitions(MegaManX2SNESRecomp PRIVATE HD2D_SCANOUT_CAPTURE=1)
     set_property(SOURCE hd2d/bridge/x2_adapter.c APPEND PROPERTY COMPILE_DEFINITIONS
         HD2D_PRODUCER="${MMX_REPLAY_REVISION}" HD2D_ENGINE="${MMX_REPLAY_ENGINE}")

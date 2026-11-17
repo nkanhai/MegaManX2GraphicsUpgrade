@@ -3,6 +3,7 @@
 #include "desktop/config.h"
 #include "desktop/sdl_compat.h"
 #include "mmx_replay.h"
+#include "../hd2d/bridge/x2_adapter.h"
 #include <stdlib.h>
 #include <string.h>
 static void (*diagnostic_prepare)(int,int,int *,int *);
@@ -23,6 +24,10 @@ static void diagnostic_after_config(void) {
     g_config.output_method=kOutputMethod_SDL;
   }
 }
+static void diagnostic_shutdown(void) {
+  hd2d_x2_shutdown();
+  MmxReplayShutdown();
+}
 static int MmxDiagnosticDesktopMain(const SnesDesktopHostGame *base,int argc,char **argv) {
   MmxStartupLogging();
   for(int arg=1;arg+1<argc;++arg)
@@ -38,8 +43,8 @@ static int MmxDiagnosticDesktopMain(const SnesDesktopHostGame *base,int argc,cha
   game.prepare_frame=diagnostic_prepare_frame;
   game.after_run_frame=diagnostic_after_frame;
   game.after_config=diagnostic_after_config;
-  game.on_shutdown=MmxReplayShutdown;
+  game.on_shutdown=diagnostic_shutdown;
   int result=snesrecomp_desktop_main(&game,argc,argv);
-  MmxReplayShutdown();
+  diagnostic_shutdown();
   return MmxReplayPlaying() && (MmxReplayFailed() || !MmxReplayFinished()) ? 2:result;
 }

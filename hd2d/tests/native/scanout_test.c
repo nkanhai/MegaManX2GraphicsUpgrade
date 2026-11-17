@@ -7,6 +7,22 @@
 #include "sha256.h"
 #include <time.h>
 #include <assert.h>
+#ifdef TEST_ADAPTER
+#include "desktop/sdl_compat.h"
+#include "x2_adapter.h"
+#include <sys/stat.h>
+static uint64_t test_epoch=7;
+int FindCmdForSdlKey(SDL_Keycode key, SDL_Keymod mod) {
+  (void)key; (void)mod; return getenv("TEST_KEY_CONFLICT") ? 1 : 0;
+}
+static void key(bool down, unsigned modifiers) {
+  SDL_Event event={0}; event.type=down ? SDL_KEYDOWN : SDL_KEYUP;
+  SDL_Window *window=SDL_GetKeyboardFocus();
+  event.key.windowID=window ? SDL_GetWindowID(window) : 0;
+  event.key.keysym.sym=SDLK_F10; event.key.keysym.mod=modifiers;
+  if(SDL_PushEvent(&event)!=1) { fprintf(stderr,"SDL event injection failed\n"); exit(1); }
+}
+#endif
 
 Ppu *g_ppu;
 Dma *g_dma;
@@ -61,7 +77,7 @@ int snes_runahead_frames(void) { return getenv("TEST_RUNAHEAD") ? 1 : 0; }
 int snes_netplay_active(void) { return getenv("TEST_NETPLAY") ? 1 : 0; }
 int snes_netplay_rollback_active(void) { return getenv("TEST_ROLLBACK") ? 1 : 0; }
 int snes_rewind_is_open(void) { return getenv("TEST_REWIND") ? 1 : 0; }
-uint64_t RtlStateGeneration(void) { return 7; }
+uint64_t RtlStateGeneration(void) { return test_epoch; }
 #endif
 
 static void setup(unsigned flags) {
@@ -229,7 +245,37 @@ int main(int argc,char **argv) {
     cart.rom=synthetic_cart; cart.romSize=sizeof synthetic_cart-1;
     snes.cart=&cart; snes.ppu=g_ppu; g_snes=&snes;
   }
-  for(unsigned i=0;i<3;++i) { setup(1); draw(); }
+  if(getenv("TEST_INTERACTIVE")) {
+    CHECK(SDL_Init(SDL_INIT_VIDEO)==0);
+    unsigned frames=getenv("TEST_LIMIT") ? 68 : 6;
+    for(unsigned frame=1;frame<=frames;++frame) {
+      setup(1);
+      if(frame>=4) { test_epoch=8; snes_frame_counter=0; g_ppu->cgram[2]^=0x7fff; }
+      if(frame==2 && getenv("TEST_REJECT_ONCE")) g_ppu->mosaic=0x11;
+      if(frame==2 || frame==4 || (getenv("TEST_LIMIT") && frame>1)) {
+        if(frame==2 && getenv("TEST_COLLISION")) {
+          char path[1100];
+          snprintf(path,sizeof path,"%s/capture-000001-draw-00000000000000000002",getenv("HD2D_CAPTURE_DIR"));
+          CHECK(mkdir(path,0700)==0);
+        }
+        /* Two complete presses before a draw must coalesce. */
+        for(unsigned i=0;i<2;++i) { key(true,KMOD_LCTRL|KMOD_LSHIFT); key(false,0); }
+      } else if(frame==3) { key(true,KMOD_LSHIFT); key(false,0); }
+      draw(); print_hash();
+      /* All pointer fields start null except the bound host surface. These
+       * hashes compare the full PPU (including derived caches), CPU and DMA
+       * against a separately compiled-out process driven by identical events. */
+      Ppu state=*g_ppu; state.renderBuffer=NULL;
+      uint8_t digest[32]; sha256_compute((const uint8_t *)&state,sizeof state,digest);
+      printf("ppu_sha256="); for(unsigned i=0;i<32;++i) printf("%02x",digest[i]); puts("");
+      sha256_compute((const uint8_t *)&g_cpu,sizeof g_cpu,digest);
+      printf("cpu_sha256="); for(unsigned i=0;i<32;++i) printf("%02x",digest[i]); puts("");
+      sha256_compute((const uint8_t *)g_dma,sizeof *g_dma,digest);
+      printf("dma_sha256="); for(unsigned i=0;i<32;++i) printf("%02x",digest[i]); puts("");
+      SDL_Event event; while(SDL_PollEvent(&event)) {}
+    }
+    hd2d_x2_shutdown(); SDL_Quit();
+  } else for(unsigned i=0;i<3;++i) { setup(1); draw(); }
   print_hash();
 #else
   capture=hd2d_capture_new(HD2D_MAX_BYTES,NULL,NULL); CHECK(capture);
