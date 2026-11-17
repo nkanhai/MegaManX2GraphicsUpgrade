@@ -1,0 +1,34 @@
+name: HD-2D Apple Silicon qualification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  apple-silicon:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify native Apple Silicon toolchain
+        run: |
+          test "$(uname -m)" = arm64
+          sw_vers
+          clang --version
+          cmake --version
+      - name: Native scanout tests
+        run: |
+          cmake -S hd2d/tests/native -B hd2d/local/macos-native -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+          cmake --build hd2d/local/macos-native --parallel 3
+          ctest --test-dir hd2d/local/macos-native --output-on-failure
+      - name: Desktop dependencies
+        run: brew install sdl2 ninja
+      - name: Build ROM-free desktop host
+        run: |
+          cmake -S . -B hd2d/local/macos-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DSNESRECOMP_SDL_BACKEND=SDL2 -DSNESRECOMP_SETUP_HOST=ON -DHD2D_SCANOUT_CAPTURE=ON
+          cmake --build hd2d/local/macos-host --parallel 3
+          file hd2d/local/macos-host/MegaManX2SNESRecomp
+          ctest --test-dir hd2d/local/macos-host --output-on-failure
