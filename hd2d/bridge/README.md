@@ -2,7 +2,8 @@
 
 Sprint 1 implements a diagnostic, owner-thread recorder at `X2DrawPpuFrame`.
 It does not render in Unity, extract game assets, or alter simulation. The
-standalone suite needs CMake 3.20+, Python 3.10+, and a C11 compiler. Linux is
+standalone suite needs CMake 3.20+, Python 3.10+, a C11 compiler and SDL2
+development files (Sprint 3 keyboard tests). Linux is
 verified; a Darwin dead-strip link path and native Apple Silicon CI are added
 in Sprint 2, with qualification status in the [platform audit](../docs/architecture/MACOS_NATIVE_AUDIT.md).
 The unmodified pinned PPU is the offline replay oracle.
@@ -23,8 +24,9 @@ python3 hd2d/tools/check_upstream.py
 The native tests link the actual title loop with synthetic HDMA inputs, the
 pinned PPU, and small standalone host stubs. Both the recorder and the real
 one-shot adapter are tested; unused CPU/ROM code is discarded by Linux section
-GC (Darwin uses dead stripping). No ROM, SDL, generated game code, proprietary library, or extracted art is
-needed. Source patterns are original, generated in `scanout_test.c`.
+GC (Darwin uses dead stripping). No ROM, generated game code, proprietary
+library, or extracted art is needed. SDL tests use its dummy video driver.
+Source patterns are original, generated in `scanout_test.c`.
 
 Inspect an original synthetic capture (choose a new directory each time):
 
@@ -95,7 +97,13 @@ is an explicit failed attempt. Use native presentation with run-ahead/netplay
 off; the adapter will reject unsupported settings without changing them.
 SESSION must be a fresh nonzero 32-digit lowercase hex identifier. The single
 attempt is consumed even when allocation, profile checks, or writing fails.
-No runtime debug/TCP command or re-arm path is added.
+This one-shot mode remains unchanged. Sprint 3 additionally supports
+`HD2D_CAPTURE_INTERACTIVE=1` with no DRAW selector: Left Control + Left Shift +
+F10 requests the next draw, with a distinct directory/sequence per attempt.
+Use the [interactive launcher and guide](../docs/guides/INTERACTIVE_CAPTURE.md)
+to create unique private sessions automatically. No runtime debug/TCP command
+is added. The [trigger audit](../docs/architecture/INTERACTIVE_TRIGGER.md)
+explains callback ownership, conflict detection and the 64-attempt session cap.
 
 The header records the observed guest counter and master cycles, source Git
 revisions, engine pin, session/draw/sequence, and the upstream reset/load
@@ -114,7 +122,9 @@ exhaust the budget and drop the complete capture. This is intentional.
 
 File output, hashing and capture are synchronous. CPU timing printed by the
 adapter separates copying/hashing from publication but is not wall time or a
-gameplay latency guarantee; cart hashing can add work. Hardware accuracy,
-real X2/Cx4 scenes, arbitrary Mode-1 coverage, Windows/macOS builds and broader
-presentation profiles remain unqualified. Reference pixels are present only
+gameplay latency guarantee; cart hashing can add work. The owner reports a
+native ARM64 real-game build and exact reconstruction of an opening-narrative
+frame; two interactive gameplay captures remain a separate local acceptance
+gate. Hardware accuracy, broader X2/Cx4 scenes, arbitrary Mode-1 coverage,
+Windows/SDL3 and broader presentation profiles remain unqualified. Reference pixels are present only
 in successful captures; unsupported frames do not produce a fallback file.
