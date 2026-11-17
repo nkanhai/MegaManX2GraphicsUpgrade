@@ -199,5 +199,81 @@ namespace X2HD2D.Tests
                 Assert.That(DiagnosticWindow.TryGetOamSelection(scene, scene.BackgroundRoots[0].gameObject, out slot), Is.False);
             } finally { Object.DestroyImmediate(root); }
         }
+
+        [UnityTest, Category("Graphics")]
+        public IEnumerator DisablingRootDefersCleanupAndAllowsCleanReimport()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType, Is.Not.EqualTo(GraphicsDeviceType.Null));
+            ProjectSetup.Ensure();
+            var root = new GameObject("Synthetic deferred cleanup") { hideFlags = HideFlags.DontSave };
+            var scene = root.AddComponent<CaptureScene>();
+            try {
+                var capture = Fixture("static8"); scene.Load(capture);
+                var target = scene.BaselineView;
+                root.SetActive(false);
+                Assert.That(scene.Capture, Is.SameAs(capture), "OnDisable must only queue cleanup");
+                Assert.That(target.IsCreated(), Is.True, "No destructive cleanup inside activation callbacks");
+                for (int frame = 0; frame < 20 && scene.Capture != null; frame++) yield return null;
+                Assert.That(scene.Capture, Is.Null, "Deferred cleanup must run in stable Edit Mode");
+                Assert.That(scene.GetComponentsInChildren<CaptureResourceSet>(true), Is.Empty);
+                root.SetActive(true); scene.Load(capture);
+                EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                scene.RenderViews();
+                Assert.That(scene.GetComponentsInChildren<CaptureResourceSet>(true).Length, Is.EqualTo(1));
+                Assert.That(scene.ObjectRoots.Length, Is.EqualTo(128));
+                CollectionAssert.AreEqual(capture.CopyReferenceRgba(), CaptureScene.Readback(scene.BaselineView));
+            } finally { Object.DestroyImmediate(root); }
+        }
+
+        [UnityTest, Category("Graphics")]
+        public IEnumerator PlayModeBlocksDiagnosticsAndExitAllowsReimport()
+        {
+            Assert.That(SystemInfo.graphicsDeviceType, Is.Not.EqualTo(GraphicsDeviceType.Null));
+            ProjectSetup.Ensure();
+            bool optionsEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            var options = EditorSettings.enterPlayModeOptions;
+            var root = new GameObject("Synthetic Edit-Mode-only guard") { hideFlags = HideFlags.DontSave };
+            var scene = root.AddComponent<CaptureScene>();
+            try {
+                // Preserve references across the transition so the test can prove
+                // the guard, rather than merely losing everything to a reload.
+                EditorSettings.enterPlayModeOptionsEnabled = true;
+                EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+                var capture = Fixture("static8"); scene.Load(capture);
+                var target = scene.BaselineView;
+                yield return new EnterPlayMode(expectDomainReload: false);
+                Assert.That(DiagnosticEditMode.IsAvailable, Is.False);
+                Assert.Throws<InvalidOperationException>(() => scene.Load(capture));
+                Assert.Throws<InvalidOperationException>(() => scene.Clear());
+                Assert.Throws<InvalidOperationException>(() => scene.BuildExperiment(0));
+                Assert.Throws<InvalidOperationException>(() => scene.ApplyVisibility());
+                Assert.Throws<InvalidOperationException>(() => scene.RenderViews());
+                Assert.Throws<InvalidOperationException>(() => CaptureScene.Readback(target));
+                Assert.Throws<InvalidOperationException>(() => ComparisonExport.Export(scene));
+                int sceneHandle = root.scene.handle;
+                LogAssert.Expect(LogType.Warning, DiagnosticEditMode.Message); ProjectSetup.OpenScene();
+                LogAssert.Expect(LogType.Warning, DiagnosticEditMode.Message); ProjectSetup.Ensure();
+                Assert.That(root.scene.handle, Is.EqualTo(sceneHandle), "No Editor scene switch in Play Mode");
+                root.SetActive(false); // Exercise OnDisable while actual Play Mode is active.
+                yield return null;
+                Assert.That(scene.Capture, Is.SameAs(capture));
+                Assert.That(target.IsCreated(), Is.True, "Cleanup must stay pending throughout Play Mode");
+                yield return new ExitPlayMode();
+                for (int frame = 0; frame < 20 && (!DiagnosticEditMode.IsAvailable || scene.Capture != null); frame++) yield return null;
+                Assert.That(DiagnosticEditMode.IsAvailable, Is.True);
+                Assert.That(scene.Capture, Is.Null);
+                root.SetActive(true); scene.Load(capture);
+                EditorApplication.QueuePlayerLoopUpdate(); yield return null;
+                scene.RenderViews();
+                Assert.That(scene.GetComponentsInChildren<CaptureResourceSet>(true).Length, Is.EqualTo(1));
+                Assert.That(scene.ObjectRoots.Length, Is.EqualTo(128));
+                CollectionAssert.AreEqual(capture.CopyReferenceRgba(), CaptureScene.Readback(scene.BaselineView));
+            } finally {
+                EditorSettings.enterPlayModeOptions = options;
+                EditorSettings.enterPlayModeOptionsEnabled = optionsEnabled;
+                if (EditorApplication.isPlayingOrWillChangePlaymode) EditorApplication.isPlaying = false;
+                DiagnosticEditMode.DeferDestroy(root);
+            }
+        }
     }
 }

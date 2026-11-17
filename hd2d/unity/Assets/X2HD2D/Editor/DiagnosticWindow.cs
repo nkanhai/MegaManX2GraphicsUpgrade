@@ -19,12 +19,21 @@ namespace X2HD2D.Editor
         [MenuItem("X2 HD-2D/Graphics inspector")]
         public static void Open() => GetWindow<DiagnosticWindow>("X2 Graphics");
         private ExperimentStage stage = ExperimentStage.NormalMap;
-        private void OnEnable() { EditorApplication.update += Tick; Selection.selectionChanged += SyncHierarchySelection; }
-        private void OnDisable() { EditorApplication.update -= Tick; Selection.selectionChanged -= SyncHierarchySelection; if (tilePreview) DestroyImmediate(tilePreview); }
+        private void OnEnable() { EditorApplication.update += Tick; Selection.selectionChanged += SyncHierarchySelection; EditorApplication.playModeStateChanged += OnPlayModeState; }
+        private void OnDisable() {
+            EditorApplication.update -= Tick; Selection.selectionChanged -= SyncHierarchySelection; EditorApplication.playModeStateChanged -= OnPlayModeState;
+            DiagnosticEditMode.DeferDestroy(tilePreview); tilePreview = null;
+        }
+        private void OnPlayModeState(PlayModeStateChange state)
+        {
+            // No scene manipulation or resource destruction inside this callback.
+            DiagnosticEditMode.DeferDestroy(tilePreview); tilePreview = null;
+            scene = null; sourceName = null; error = null; Repaint();
+        }
         public static bool TryGetOamSelection(CaptureScene target, GameObject selected, out int selectedSlot)
         {
             selectedSlot = -1;
-            if (!target || target.Frame == null || target.ObjectRoots == null || !selected) return false;
+            if (!DiagnosticEditMode.IsAvailable || !target || target.Frame == null || target.ObjectRoots == null || !selected) return false;
             // Selecting either the OAM root or its decoded/wrapped child works.
             var source = selected.GetComponentInParent<GraphicsSource>(true);
             if (!source || source.componentKind != "OAM piece" || source.sourceIndex < 0 || source.sourceIndex >= 128 ||
@@ -33,11 +42,13 @@ namespace X2HD2D.Editor
         }
         private void SyncHierarchySelection()
         {
+            if (!DiagnosticEditMode.IsAvailable) return;
             if (!scene) scene = FindAnyObjectByType<CaptureScene>();
             if (TryGetOamSelection(scene, Selection.activeGameObject, out int selected)) { slot = selected; Repaint(); }
         }
         private void Tick()
         {
+            if (!DiagnosticEditMode.IsAvailable) return;
             if (!scene) scene = FindAnyObjectByType<CaptureScene>();
             if (!scene || scene.Frame == null || EditorApplication.timeSinceStartup - lastRender < 0.1) return;
             lastRender = EditorApplication.timeSinceStartup;
@@ -47,6 +58,7 @@ namespace X2HD2D.Editor
         }
         private void Import()
         {
+            if (!DiagnosticEditMode.IsAvailable) { error = DiagnosticEditMode.Message; return; }
             string path = EditorUtility.OpenFilePanel("Read private runtime .x2scan (not copied into Assets)", "", "x2scan");
             if (string.IsNullOrEmpty(path)) return;
             try { var capture = ScanoutReader.ReadFile(path); scene.Load(capture); line = 1; slot = scene.ExperimentSlot; stage = scene.LightingStage; sourceName = Path.GetFileName(path); error = null; }
@@ -61,13 +73,17 @@ namespace X2HD2D.Editor
         }
         private void OnGUI()
         {
+            if (!DiagnosticEditMode.IsAvailable) {
+                EditorGUILayout.HelpBox(DiagnosticEditMode.Message, MessageType.Warning);
+                return; // No scene switching, imports, renders, exports or visibility changes.
+            }
             if (!scene) scene = FindAnyObjectByType<CaptureScene>();
             if (!scene) { EditorGUILayout.HelpBox("Open the diagnostic scene to inspect independent BG and OAM components.", MessageType.Info); if (GUILayout.Button("Open diagnostic scene")) ProjectSetup.OpenScene(); return; }
             scroll = EditorGUILayout.BeginScrollView(scroll);
             GUILayout.Label("Offline graphics reconstruction", EditorStyles.boldLabel);
             if (GUILayout.Button("Import private .x2scan (read only)")) Import();
             if (!string.IsNullOrEmpty(error)) EditorGUILayout.HelpBox(error, MessageType.Error);
-            if (scene.Capture == null) { EditorGUILayout.HelpBox("Import an original synthetic fixture or a private gameplay capture outside Assets. Nothing is copied into the project.", MessageType.Info); EditorGUILayout.EndScrollView(); return; }
+            if (scene.Capture == null) { EditorGUILayout.HelpBox("Import an original synthetic fixture or a private gameplay capture outside Assets. Reimport after exiting Play Mode; transient graphics are cleared safely in Edit Mode. Nothing is copied into the project.", MessageType.Info); EditorGUILayout.EndScrollView(); return; }
             GUILayout.Label((sourceName ?? "Capture") + " | session " + scene.Capture.Session + " | sequence " + scene.Capture.Sequence);
             if (!scene.Frame.IsSupported) EditorGUILayout.HelpBox("INCOMPLETE — selected-state component inspection, not full-frame reconstruction.\n" + string.Join("\n", scene.Frame.UnsupportedReasons), MessageType.Warning);
             else EditorGUILayout.HelpBox("Supported static Mode-1 profile. Use Export comparison to measure Unity GPU fidelity; supported does not mean already verified.", MessageType.Info);
@@ -103,7 +119,7 @@ namespace X2HD2D.Editor
                     int index = GraphicsDecoder.PlanarPixel(state.Vram, plane.TileBaseWord, entry & 1023, plane.BitsPerPixel, x, y);
                     if (index != 0) Buffer.BlockCopy(GraphicsDecoder.PaletteColor(state.Cgram, ((entry >> 10) & 7) * (1 << plane.BitsPerPixel) + index, state.Get("inidisp") & 15), 0, pixels, (y * 8 + x) * 4, 4);
                 }
-                if (tilePreview) DestroyImmediate(tilePreview); tilePreview = CaptureScene.Texture(pixels, 8, 8);
+                if (tilePreview) DestroyImmediate(tilePreview); tilePreview = scene.PreviewTexture(pixels, 8, 8);
             }
             if (tilePreview) GUILayout.Label(tilePreview, GUILayout.Width(64), GUILayout.Height(64));
             slot = EditorGUILayout.IntSlider("OAM hardware slot", slot, 0, 127);

@@ -24,8 +24,7 @@ namespace X2HD2D.Unity
         [NonSerialized] public bool[] BackgroundVisible = { true, true, true };
         [NonSerialized] public bool ObjectsVisible = true;
         public CaptureTreatment treatment;
-        private readonly List<Object> owned = new List<Object>();
-        private readonly List<Object> experimentOwned = new List<Object>();
+        private CaptureResourceSet resources;
         public Light2D ExperimentLight { get; private set; }
         public SpriteRenderer ExperimentSprite { get; private set; }
         public ExperimentStage LightingStage { get; private set; } = ExperimentStage.NormalMap;
@@ -39,35 +38,65 @@ namespace X2HD2D.Unity
         public bool HasRendered { get; private set; }
         public bool HasFilters => !ObjectsVisible || BackgroundVisible.Any(v => !v);
 
+        private CaptureResourceSet ResourceSet
+        {
+            get {
+                DiagnosticEditMode.Require("Create diagnostic resources");
+                if (!resources) {
+                    var node = new GameObject("Transient diagnostic resource ownership") { hideFlags = HideFlags.DontSave };
+                    node.transform.SetParent(transform, false);
+                    resources = node.AddComponent<CaptureResourceSet>(); resources.hideFlags = HideFlags.DontSave;
+                }
+                return resources;
+            }
+        }
         private T Own<T>(T value, bool experiment = false) where T : Object
-        { value.hideFlags = HideFlags.DontSave; (experiment ? experimentOwned : owned).Add(value); return value; }
+        { value.hideFlags = HideFlags.DontSave; (experiment ? ResourceSet.Experiment : ResourceSet.Baseline).Add(value); return value; }
         private GameObject Node(string title, Transform parent, int layer, bool experiment = false)
         { var node = Own(new GameObject(title), experiment); node.layer = layer; node.transform.SetParent(parent, false); return node; }
         private static void Release(List<Object> items)
         {
-            foreach (Object item in items) if (item) {
-                if (item is GameObject node) node.SetActive(false);
-                if (Application.isPlaying) Destroy(item); else DestroyImmediate(item);
-            }
+            DiagnosticEditMode.Require("Release diagnostic resources");
+            // Only called from stable Edit Mode, never OnDisable/OnDestroy.
+            // SetActive during Unity's activation callbacks causes assertions.
+            foreach (Object item in items) if (item) DestroyImmediate(item);
             items.Clear();
+        }
+        internal Object[] OwnedResourceSnapshot()
+        {
+            return GetComponentsInChildren<CaptureResourceSet>(true)
+                .SelectMany(set => set.Baseline.Concat(set.Experiment).Append((Object)set.gameObject)).ToArray();
         }
         public void Clear()
         {
-            Release(experimentOwned); Release(owned); Capture = null; Frame = null;
+            DiagnosticEditMode.Require("Clear diagnostic capture");
+            DiagnosticEditMode.CancelCleanup(this);
+            foreach (var set in GetComponentsInChildren<CaptureResourceSet>(true)) {
+                Release(set.Experiment); Release(set.Baseline); DestroyImmediate(set.gameObject);
+            }
+            resources = null; Capture = null; Frame = null;
             ExperimentLight = null; ExperimentSprite = null; ExperimentSlot = -1;
             ExperimentError = experimentSetupError = null; ExperimentHasRendered = false; ExperimentNonblackPixels = -1;
             BaselineView = ExperimentView = null; ReferenceView = null; HasRendered = false;
+            BaselineCamera = ExperimentCamera = null; BackgroundRoots = ObjectRoots = null;
         }
-        private void OnDisable() => Clear();
+        private void OnDisable() => DiagnosticEditMode.DeferCleanup(this);
+        private void OnDestroy() => DiagnosticEditMode.DeferCleanup(this);
+        private void OnEnable()
+        {
+            if (Frame == null && GetComponentInChildren<CaptureResourceSet>(true)) DiagnosticEditMode.DeferCleanup(this);
+        }
 
         public static Texture2D Texture(byte[] topDown, int width, int height)
         {
+            DiagnosticEditMode.Require("Create diagnostic texture");
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false, true) {
                 filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
             byte[] bottomUp = new byte[topDown.Length];
             for (int y = 0; y < height; y++) Buffer.BlockCopy(topDown, y * width * 4, bottomUp, (height - 1 - y) * width * 4, width * 4);
             texture.LoadRawTextureData(bottomUp); texture.Apply(false, false); return texture;
         }
+        public Texture2D PreviewTexture(byte[] topDown, int width, int height) => Own(Texture(topDown, width, height));
         private SpriteRenderer Quad(string name, Transform parent, int layer, byte[] pixels, int width, int height,
             float x, float y, int order, Material material, bool experiment = false, Texture2D normal = null)
         {
@@ -104,6 +133,7 @@ namespace X2HD2D.Unity
         }
         public void Load(ScanoutCapture capture, int line = 1)
         {
+            DiagnosticEditMode.Require("Import diagnostic capture");
             Clear(); Capture = capture; Frame = GraphicsDecoder.Decode(capture, line);
             BackgroundVisible = new[] { true, true, true }; ObjectsVisible = true;
             BaselineCamera = ViewCamera("Baseline camera (unlit, no post processing)", BaselineLayer, out BaselineView);
@@ -145,13 +175,16 @@ namespace X2HD2D.Unity
         }
         public void ApplyVisibility()
         {
+            DiagnosticEditMode.Require("Change diagnostic visibility");
             if (Frame == null) return;
             for (int i = 0; i < 3; i++) BackgroundRoots[i].gameObject.SetActive(BackgroundVisible[i]);
             foreach (var root in ObjectRoots) root.parent.gameObject.SetActive(ObjectsVisible);
         }
         public void BuildExperiment(int selectedSlot = -1, ExperimentStage stage = ExperimentStage.NormalMap)
         {
-            Release(experimentOwned); ExperimentLight = null; ExperimentSprite = null;
+            DiagnosticEditMode.Require("Build lighting experiment");
+            if (Frame == null) return;
+            Release(ResourceSet.Experiment); ExperimentLight = null; ExperimentSprite = null;
             ExperimentError = experimentSetupError = null; ExperimentHasRendered = false; ExperimentNonblackPixels = -1;
             ExperimentOpaquePixels = experimentSourceNonblack = 0; ExperimentSlot = -1; LightingStage = stage;
             if (Frame == null) return;
@@ -222,6 +255,7 @@ namespace X2HD2D.Unity
         }
         public string[] ExperimentDiagnostics()
         {
+            DiagnosticEditMode.Require("Inspect lighting experiment");
             var issues = new List<string>();
             if (ExperimentError != null) issues.Add(ExperimentError);
             if (ExperimentOpaquePixels == 0) issues.Add("Source OAM " + ExperimentSlot + " is fully transparent; choose a visible source piece.");
@@ -268,6 +302,7 @@ namespace X2HD2D.Unity
         }
         public void RenderViews()
         {
+            DiagnosticEditMode.Require("Render diagnostic views");
             HasRendered = false;
             if (!BaselineCamera || GraphicsSettings.currentRenderPipeline == null)
                 throw new InvalidOperationException("No active capture/URP pipeline. Initialize diagnostic URP settings and allow the Editor to repaint.");
@@ -303,6 +338,7 @@ namespace X2HD2D.Unity
         }
         public static byte[] Readback(RenderTexture view)
         {
+            DiagnosticEditMode.Require("Read diagnostic render target");
             var previous = RenderTexture.active;
             var texture = new Texture2D(view.width, view.height, TextureFormat.RGBA32, false, true);
             try {

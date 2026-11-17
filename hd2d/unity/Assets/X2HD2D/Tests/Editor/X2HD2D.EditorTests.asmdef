@@ -4,6 +4,8 @@
     "X2HD2D.Core",
     "X2HD2D.Runtime",
     "X2HD2D.Editor",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
     "Unity.RenderPipelines.Universal.Runtime",
     "Unity.RenderPipelines.Universal.2D.Runtime",
     "Unity.RenderPipelines.Core.Runtime"

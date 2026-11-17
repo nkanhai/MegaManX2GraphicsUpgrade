@@ -73,7 +73,7 @@ graphics; no ROM or game-derived capture was accessed or downloaded.
 | Existing native CTest suite | **6/6 groups PASS**, including on/off isolation, file validation and interactive requests |
 | Focused pinned upstream checks | Raster snapshot, render workers and all six PPU test executables PASS |
 | Recursive dependency verification | All five revisions match `upstream-lock.json`; sources unchanged |
-| Unity EditMode suite (now 7 tests) | **NOT RUN here**: no Unity Editor/graphics qualification environment |
+| Unity EditMode suite (now 9 tests) | **NOT RUN here**: no Unity Editor/graphics qualification environment |
 | Real gameplay baseline inside Unity Metal on Apple Silicon | **OWNER-OBSERVED PASS: 0/57,344 differing pixels on one real gameplay capture**, separate from cloud CI |
 | Normal-map/Light2D experiment | Owner reported black output; correction below awaits local GPU confirmation |
 
@@ -161,6 +161,41 @@ For this follow-up, all 23 Python tests and 104 managed assertions passed
 of all ten Unity C# files and assembly JSON validation passed; syntax parsing
 does not establish Unity API binding or successful Editor compilation.
 
+## Edit-Mode-only lifecycle follow-up
+
+The owner accidentally entered Play Mode with an imported capture and reported
+a `GameObject.SetActive` assertion through `Release → Clear → OnDisable`, followed
+by an Editor scene-management exception. Cleanup was changing activation and
+destroying objects inside Unity's own deactivation callback; `OpenScene` also
+lacked a guard before calling Editor scene APIs.
+
+The tool now gates scene setup/switching, capture loading/clearing, visibility,
+lighting, rendering, readback and export on stable Edit Mode. The window pauses
+with explicit feedback during Play Mode/transitions, and scene/setup menu items
+are disabled. Direct scene/setup calls return a warning before any dialog or
+scene switch; direct diagnostic mutations reject the unsupported mode.
+
+Lifecycle callbacks only queue cleanup. `Release` no longer calls `SetActive`
+or has a Play Mode destruction path. Destruction runs after callbacks in stable
+Edit Mode, including after returning from Play Mode with reloads disabled.
+Transient `DontSave` resource-owner components retain ownership references for
+reload recovery, and detached resource handles cover a root destroyed before
+deferred cleanup. On return, the capture is cleared and can be reimported without
+duplicating generated graphics. No capture pixels are saved into scene assets.
+
+Two additional Unity regressions cover deferred deactivation cleanup/reimport
+and actual Play Mode entry/exit with reloads disabled. They require blocked
+operations and scene switching, no destruction while playing, one resource owner
+after reimport, and exact synthetic baseline pixels. Existing tests and baseline
+decoding/materials/sorting/camera configuration are retained. The nine Unity
+tests have **not run in cloud**; default-reload manual qualification on the Mac
+is documented alongside them.
+The test assembly explicitly references Unity's Engine/Editor TestRunner
+assemblies for its `EnterPlayMode` / `ExitPlayMode` yield instructions.
+For this correction, all 23 Python tests and 104 managed assertions pass;
+all twelve Unity C# files pass C# 9 syntax parsing and their assembly/asset
+metadata validates. These checks do not substitute for Unity lifecycle execution.
+
 ## Limitations and remaining acceptance work
 
 The reader's runtime profile is broader than the component renderer's faithful
@@ -171,7 +206,7 @@ size modes 6/7 use the pinned square approximation for inspection only. Other
 display modes/mosaic/SETINI features are rejected entirely. Detection is
 conservative and can flag changes to unused memory as incomplete.
 
-The owner should rerun the seven EditMode tests with a real graphics device and
+The owner should rerun the nine EditMode tests with a real graphics device and
 inspect the same visible piece through all four experimental stages, then
 re-export the already qualified gameplay baseline to check isolation. Record
 the Editor, package resolution, Metal device and GPU/managed counts. Keep the capture,

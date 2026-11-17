@@ -25,6 +25,7 @@ namespace X2HD2D.Editor
         }
         public static string Export(CaptureScene scene)
         {
+            DiagnosticEditMode.Require("Export diagnostic comparison");
             scene.RenderViews(); // Read back current visibility/materials, never a stale or uninitialized target.
             if (scene.Capture == null || !scene.BaselineView || !scene.HasRendered) throw new InvalidOperationException("No rendered capture");
             byte[] reference = scene.Capture.CopyReferenceRgba(), gpu = CaptureScene.Readback(scene.BaselineView), managed = GraphicsDecoder.Composite(scene.Frame, false);

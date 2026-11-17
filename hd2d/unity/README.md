@@ -36,6 +36,20 @@ and additional GPU tests below still require an owner run. See the
    outside `Assets`; do not drag them into Project view. Nothing is copied or
    converted to saved Unity assets. Reopen the file after a domain reload.
 
+The diagnostic tool is **Edit-Mode-only**. During Play Mode and transitions the
+window shows a clear warning and offers no import, rendering, visibility,
+lighting or export actions. Scene/setup menus are disabled, and direct calls
+are guarded before any save dialog or Editor scene-management operation.
+The tool does not cancel Play Mode for the rest of the project.
+
+If Play Mode is entered accidentally, stop it, wait for the Editor transition
+to finish, then import the capture again. Transient capture state is discarded
+after the return to stable Edit Mode, including when domain/scene reload is
+disabled. Cleanup is queued from lifecycle callbacks; it does not change
+activation or destroy resources inside `OnDisable`, `OnDestroy` or Play Mode.
+A transient `DontSave` resource owner retains cleanup references across Editor
+reloads without serializing private graphics into the saved diagnostic scene.
+
 The existing [interactive capture workflow](../docs/guides/INTERACTIVE_CAPTURE.md)
 supplies real captures. It is unchanged. Unity needs the completed capture,
 not the ROM or the native executable. Run the existing
@@ -226,15 +240,25 @@ export X2_HD2D_FIXTURES="$PWD/hd2d/local/unity-fixtures"
   -logFile "$PWD/hd2d/local/unity-tests.log"
 ```
 
-All seven EditMode tests must pass: managed fixture parity, explicit raster
+All nine EditMode tests must pass: managed fixture parity, explicit raster
 limitations, GPU parity for every static fixture, independent objects/visibility,
 nonblack experimental GPU output through all four lighting stages, diagnostics
 and baseline isolation during injected experimental failures, and Hierarchy OAM
-selection mapping. The lighting test uses a known visible original synthetic
+selection mapping, deferred cleanup/reimport, and Play Mode guards/recovery.
+The lifecycle test deliberately enters and exits Play Mode with domain and scene
+reload disabled, temporarily restoring the previous Editor options afterward.
+The lighting test uses a known visible original synthetic
 sprite and checks exact baseline pixels after every stage. Missing fixtures or
 a null graphics device fail explicitly. In an empty diagnostic scene, the Editor Test Runner can also
 run the `Managed` and `Graphics` categories. Do not run graphics tests alongside
 an already imported private scene: the prototype reserves Unity layers 8 and 9.
+
+Also check the owner's normal Play Mode settings manually: import a synthetic
+capture, enter Play Mode, verify that the inspector is paused and scene/setup
+menus are disabled, then stop, reimport and export a zero-difference baseline.
+There should be one resource-owner child and 128 OAM roots after reimport, with
+no activation assertion or Editor scene-switch exception. The new lifecycle
+tests and this manual check still require local Unity execution.
 
 GitHub Actions runs the license-free native/managed tests. It does **not** claim
 Unity compilation or GPU coverage. After successful owner qualification, record
