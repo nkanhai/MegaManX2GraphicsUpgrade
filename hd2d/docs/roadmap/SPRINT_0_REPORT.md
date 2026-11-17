@@ -167,26 +167,21 @@ should a user-owned ROM supply local real-game captures or Unity importing begin
 
 ## Publication status
 
-All project changes are committed locally on `feature/hd2d-sprint-0`, starting
-with commit `3a2888486227b7d49136269ff8c203499f71ff70` and a follow-up documenting
-this publication blocker. The working tree is clean after these commits.
+Published on 2026-11-17 in
+[PR #1](https://github.com/nkanhai/MegaManX2GraphicsUpgrade/pull/1), from
+`feature/hd2d-sprint-0` to the canonical fork's `master`. The original baseline
+commit `3a2888486227b7d49136269ff8c203499f71ff70` and publication-blocker record
+`734623f5e68d94d9ce8d91948e0ddfd48d7e74f3` remain intact; this status correction
+is an additional commit. No work was recreated or discarded.
 
-Git push to the canonical fork failed with HTTP 403 (`Permission ... denied`).
-The GitHub connector's `create_branch` failed with HTTP 403 and
-`Resource not accessible by integration`. Although repository metadata reports
-owner push/admin permissions, the active integration lacks write access.
-No remote feature branch or PR was created. Engineering work is complete;
-publication to the owner's fork remains outstanding.
+The initial Git push returned HTTP 403 (`Permission ... denied`), and connector
+branch creation returned `Resource not accessible by integration`. After the
+owner reviewed repository/connection access, the same authenticated Git push
+succeeded, followed by connector PR creation. Both publication paths now work;
+the earlier response alone does not identify which permission setting changed.
 
-A review patch and Git bundle are generated outside the repository at
-`/workspace/hd2d-sprint-0.patch` and `/workspace/hd2d-sprint-0.bundle`.
-The prepared PR body is in ignored `hd2d/local/PR_BODY.md`. Once repository write
-access is available, publish without changing the target:
-
-```sh
-git push --set-upstream origin feature/hd2d-sprint-0
-gh pr create --repo nkanhai/MegaManX2GraphicsUpgrade --base master \
-  --head feature/hd2d-sprint-0 \
-  --title 'Establish HD-2D Sprint 0 baseline and graphics capture proposal' \
-  --body-file hd2d/local/PR_BODY.md
-```
+The original local review patch and bundle remain at
+`/workspace/hd2d-sprint-0.patch` and `/workspace/hd2d-sprint-0.bundle`; they retain
+the two pre-publication commits. The PR branch is the current review source,
+including this publication-status update. The prepared PR body is also retained
+in ignored `hd2d/local/PR_BODY.md`.

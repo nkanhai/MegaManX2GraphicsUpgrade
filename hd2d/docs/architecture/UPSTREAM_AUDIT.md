@@ -12,12 +12,12 @@ repository. `origin/master` is exactly the audited commit (zero commits ahead
 or behind), so the initial audit remains applicable without rework.
 Work branch: `feature/hd2d-sprint-0`; PR base: `origin/master`.
 
-Repository metadata reports that the account has push/admin permission, but
-both Git push and connector branch creation returned HTTP 403. The connector
-reported `Resource not accessible by integration`: account ownership does not
-establish write permission for the active connection. The canonical fork is
-confirmed; remote publication remains blocked. No changes target the original
-author's repository.
+Publication is verified in [PR #1](https://github.com/nkanhai/MegaManX2GraphicsUpgrade/pull/1)
+against the canonical fork's `master`. Initial Git push and connector branch
+creation returned HTTP 403 (`Resource not accessible by integration`). After
+the owner reviewed connection access, retrying the existing branch push and
+creating the PR through the connector both succeeded on 2026-11-17. The prior
+permission blocker is resolved; no changes target the original author's repository.
 
 Exact URLs and revisions are also in [upstream-lock.json](upstream-lock.json).
 `git submodule update --init --recursive` and `bash tools/bootstrap.sh` succeeded.
