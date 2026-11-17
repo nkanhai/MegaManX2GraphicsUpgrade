@@ -9,6 +9,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        hd2d_capture: ['OFF', 'ON']
     steps:
       - uses: actions/checkout@v6
         with:
@@ -16,6 +19,6 @@ jobs:
       - name: Install desktop dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libsdl2-dev libgl1-mesa-dev
       - name: Configure ROM-free setup host
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSNESRECOMP_SDL_BACKEND=SDL2 -DSNESRECOMP_SETUP_HOST=ON
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSNESRECOMP_SDL_BACKEND=SDL2 -DSNESRECOMP_SETUP_HOST=ON -DHD2D_SCANOUT_CAPTURE=${{ matrix.hd2d_capture }}
       - name: Compile shared desktop host and game adapters
         run: cmake --build build --target MegaManX2SNESRecomp --parallel 4

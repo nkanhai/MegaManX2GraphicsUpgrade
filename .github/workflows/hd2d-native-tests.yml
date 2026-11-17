@@ -1,0 +1,39 @@
+name: HD-2D native scanout tests
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - build_type: Release
+            sanitize: 'OFF'
+          - build_type: Debug
+            sanitize: 'ON'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Configure ROM-independent native harness
+        run: >-
+          cmake -S hd2d/tests/native -B hd2d/local/ci-native
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DHD2D_SANITIZE=${{ matrix.sanitize }}
+      - name: Build and test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          cmake --build hd2d/local/ci-native --parallel 2
+          ctest --test-dir hd2d/local/ci-native --output-on-failure
+      - name: Focused pinned upstream tests
+        if: matrix.sanitize == 'OFF'
+        run: python hd2d/tools/check_upstream.py
