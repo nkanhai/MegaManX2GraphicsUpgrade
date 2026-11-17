@@ -12,7 +12,13 @@ large speculative implementation.
 | 4: HD-2D demonstration | One playable section, normals/lights/emission/particles, charged projectile presentation; original simulation authoritative |
 | 5: reusable content pipeline | Stable context-aware catalogue and import/material mappings applicable to a second stage |
 
-## Next isolated task: native synthetic scanout recorder
+## Sprint 1: native synthetic scanout recorder
+
+Implemented for a restricted native Mode-1 profile; see
+[Sprint 1 report](SPRINT_1_REPORT.md). The acceptance criteria below are retained
+as the original gate. Verified pixel parity is canonical RGBA (source X padding
+is undefined in the legacy renderer), with a single bounded binary container
+instead of separately named blobs. Real-game qualification remains open.
 
 Implement `hd2d/bridge/` as an opt-in **single-frame native-profile capture
 adapter** at `X2DrawPpuFrame`, plus a ROM-independent native harness that drives

@@ -15,6 +15,9 @@ introduced. Dependency notices and history remain intact.
 
 ## Start here
 
+- [Sprint 1 implementation, tests and limitations](docs/roadmap/SPRINT_1_REPORT.md)
+- [Native recorder usage and ROM-independent replay](bridge/README.md)
+- [Versioned runtime scanout format](schemas/RUNTIME_SCANOUT_V1.md)
 - [Sprint 0 report and reproducible checks](docs/roadmap/SPRINT_0_REPORT.md)
 - [Upstream audit and pinned revisions](docs/architecture/UPSTREAM_AUDIT.md)
 - [Rendering pipeline and exact observation points](docs/architecture/RENDERING_PIPELINE.md)
@@ -54,8 +57,8 @@ Never force-add a ROM, firmware, save, screenshot, or extracted game asset.
 
 ## Current boundary
 
-Sprint 0 establishes source knowledge and a tested synthetic format. It does
-not establish real-game reconstruction fidelity, gameplay parity, an Apple
-Silicon runtime build, or Unity support. `bridge/` and `unity/` are deliberately
-not filled with placeholders. The next task is a bounded scanline capture
-adapter, with synthetic native tests before a user-owned ROM comparison.
+Sprint 1 adds an opt-in, bounded native Mode-1 scanout recorder and offline
+replay tests against the pinned PPU. Synthetic parity and capture isolation
+are verified for the documented cases. Real-game reconstruction fidelity,
+gameplay parity, Apple Silicon and Unity remain unqualified. The Sprint 0
+synthetic JSON format stays separate from the new runtime binary container.
