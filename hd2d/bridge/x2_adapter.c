@@ -66,8 +66,13 @@ void hd2d_x2_begin(void) {
   ++draw;
   if(draw!=target) return;
   consumed=true; /* Exactly one attempt, including unsupported/error cases. */
-  if(snes_runahead_frames() || snes_netplay_active() || snes_netplay_rollback_active() || snes_rewind_is_open()) {
-    fprintf(stderr,"[hd2d] capture rejected: speculative/netplay/rewind presentation\n"); return;
+  const char *host_failure=NULL;
+  if(snes_runahead_frames()) host_failure="runahead_frames: requires 0";
+  else if(snes_netplay_active()) host_failure="netplay_active: requires false";
+  else if(snes_netplay_rollback_active()) host_failure="netplay_rollback_active: requires false";
+  else if(snes_rewind_is_open()) host_failure="rewind_is_open: requires false";
+  if(host_failure) {
+    fprintf(stderr,"[hd2d] capture rejected at draw %" PRIu64 ": %s\n",draw,host_failure); return;
   }
   clock_t start=clock();
   identity.epoch=RtlStateGeneration(); identity.sequence=1; identity.draw=draw;
@@ -83,7 +88,7 @@ void hd2d_x2_begin(void) {
   Hd2dStatus status=hd2d_capture_begin(capture,&identity,g_ppu);
   capture_cpu=(double)(clock()-start)/CLOCKS_PER_SEC;
   if(status!=HD2D_RECORDING) {
-    fprintf(stderr,"[hd2d] capture rejected: %s\n",hd2d_status_name(status));
+    fprintf(stderr,"[hd2d] capture rejected at draw %" PRIu64 ": %s: %s\n",draw,hd2d_status_name(status),hd2d_capture_detail(capture));
     hd2d_capture_free(capture); capture=NULL;
   }
 }
@@ -101,6 +106,9 @@ void hd2d_x2_finish(void) {
   capture_cpu+=(double)(clock()-start)/CLOCKS_PER_SEC;
   start=clock();
   if(status==HD2D_COMPLETE) status=hd2d_capture_publish(capture,directory);
+  if(status!=HD2D_COMPLETE)
+    fprintf(stderr,"[hd2d] failure detail: %s\n",status==HD2D_IO ?
+      "publication failed: destination must be a new writable directory; check file/close/rename errors" : hd2d_capture_detail(capture));
   fprintf(stderr,"[hd2d] %s: draw=%" PRIu64 " epoch=%" PRIu64 " bytes=%zu capture_cpu_ms=%.3f publish_cpu_ms=%.3f\n",
     hd2d_status_name(status),draw,identity.epoch,bytes,1000*capture_cpu,
     1000.0*(clock()-start)/CLOCKS_PER_SEC);

@@ -55,6 +55,13 @@ silently move a gitlink to an unpublished submodule commit.
 
 ## Risk register
 
+Sprint 2 follows up graphics extraction with real-game qualification before
+starting the Unity milestone. It supplies diagnostic reasons, stronger
+synthetic coverage, private ROM build/capture tooling and image-diff reports.
+See [Sprint 2 report](SPRINT_2_REPORT.md) for verified Linux results and the
+specific ROM-access/Apple-Silicon-runner blockers. The long-term milestones
+above are not sprint numbers; Unity and the asset catalogue remain deferred.
+
 | ID / severity | Risk and evidence | Mitigation / validation gate | Owner |
 |---|---|---|---|
 | R1 high | Incomplete scanout state: final PPU values lose HDMA changes; X2 does not use shared journal replay; VRAM uploads are excluded from that journal | Observe each actual line and effective memory; differential synthetic replay then real captures; distinguish upstream from hardware fidelity | Engineering + owner scene review |

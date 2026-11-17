@@ -16,13 +16,13 @@ extern bool test_shadow_active;
 extern Snes *g_snes;
 void X2DrawPpuFrame(void);
 static unsigned calls, inits, starts;
-static bool changes=true, flooding;
+static bool changes=true, flooding, priority_raster;
 #ifndef TEST_ADAPTER
 static bool armed;
 static Hd2dCapture *capture;
 #endif
 static Hd2dIdentity id;
-static uint8_t pixels[224][1056]; /* Exercise source pitch and untouched padding. */
+static _Alignas(4) uint8_t pixels[224][1056]; /* Source pitch and untouched padding. */
 #if defined(HD2D_SCANOUT_CAPTURE) && !defined(TEST_ADAPTER)
 static uint8_t rgba[HD2D_RGBA_BYTES];
 #endif
@@ -37,8 +37,11 @@ void SimpleHdma_Init(SimpleHdma *c,DmaChannel *dc) { (void)c; CHECK(dc==&g_dma->
 void SimpleHdma_DoLine(SimpleHdma *c) {
   (void)c;
   unsigned line=calls/8, channel=calls++%8;
-  if(channel || !changes) return;
+  if(channel) return;
+  if(priority_raster && line==19) g_ppu->oamaddl=2;
+  if(!changes) return;
   if(line==63) { g_ppu->hScroll[0]=13; g_ppu->cgram[1]=0x03e0; }
+  if(line==63 && getenv("TEST_MIDFRAME_MOSAIC")) g_ppu->mosaic=0x11;
   if(line==95) g_ppu->vram[0x1000]=0x55aa;
   if(line==127) { g_ppu->cgram[1]=0x001f; g_ppu->vScroll[1]=7; }
   if(line==143) g_ppu->oam[0]=(uint16_t)(150<<8|41);
@@ -67,6 +70,7 @@ static void setup(unsigned flags) {
   memset(pixels,0xa5,sizeof pixels);
   g_ppu->renderBuffer=&pixels[0][0]; g_ppu->renderPitch=sizeof pixels[0]; g_ppu->renderFlags=flags;
   g_ppu->inidisp=15; g_ppu->bgmode=1;
+  if(getenv("TEST_PPU_MOSAIC")) g_ppu->mosaic=0x11;
   g_ppu->bgXsc[0]=0; g_ppu->bgXsc[1]=4; g_ppu->bgTileAdr=0x21;
   g_ppu->screenEnabled[0]=0x13; g_ppu->screenEnabled[1]=2;
   g_ppu->hScroll[1]=3; g_ppu->vScroll[0]=1;
@@ -155,6 +159,60 @@ static void verify_scene_contributors(void) {
     CHECK(memcmp(reference,changed,32));
   }
 }
+static void replay_current(void) {
+#ifdef HD2D_SCANOUT_CAPTURE
+  size_t length; char error[256];
+  const uint8_t *bytes=hd2d_capture_data(capture,&length);
+  CHECK(bytes && hd2d_replay(bytes,length,rgba,error,sizeof error));
+#endif
+}
+static void priority_scene(unsigned flags) {
+  setup(flags); changes=false; armed=true;
+  g_ppu->screenEnabled[0]=0x11; g_ppu->screenEnabled[1]=0;
+  g_ppu->screenWindowed[0]=0; g_ppu->cgwsel=g_ppu->cgadsub=0;
+  g_ppu->hScroll[0]=g_ppu->vScroll[0]=0;
+  g_ppu->cgram[1]=0x7c00; g_ppu->cgram[129]=0x001f; g_ppu->cgram[145]=0x03e0;
+  for(unsigned i=0;i<1024;++i) g_ppu->vram[i]=0;
+  for(unsigned i=0;i<128;++i) g_ppu->oam[i*2]=0xe000;
+  g_ppu->oam[0]=(16<<8)|32; g_ppu->oam[1]=0;
+}
+static void expect_rgb(unsigned y, unsigned r, unsigned g, unsigned b) {
+  const uint8_t *pixel=pixels[y]+34*4;
+  CHECK(pixel[2]==r && pixel[1]==g && pixel[0]==b);
+}
+static void verify_sprite_priorities(void) {
+  unsigned cases=0;
+  for(unsigned flags=0;flags<=9;++flags) if(!(flags&6)) {
+    /* All four OBJ priorities against both BG1 priorities, with explicit
+     * expected SNES priority ordering as well as whole-frame replay parity. */
+    for(unsigned high=0;high<2;++high) for(unsigned priority=0;priority<4;++priority) {
+      priority_scene(flags);
+      for(unsigned i=0;i<1024;++i) g_ppu->vram[i]=(uint16_t)(high?0x2000:0);
+      g_ppu->oam[1]=(uint16_t)(priority<<12);
+      draw();
+      bool front=priority>=(high?3u:2u);
+      expect_rgb(18,front?255:0,0,front?0:255); replay_current(); ++cases;
+    }
+    /* Earlier OAM wins even when its OBJ priority is lower. Rotate the first
+     * slot mid-raster: the following line must switch to the green object. */
+    priority_scene(flags); g_ppu->screenEnabled[0]=0x10;
+    g_ppu->oam[2]=g_ppu->oam[0]; g_ppu->oam[3]=0x3200;
+    g_ppu->oamaddh=0x80; priority_raster=true;
+    draw(); expect_rgb(18,255,0,0); expect_rgb(19,0,255,0); replay_current(); ++cases;
+    priority_raster=false;
+    /* Exercise range/time overflow and both sprite-limit policies, not just
+     * the flag value in a scene that stays below the hardware limits. */
+    priority_scene(flags); g_ppu->screenEnabled[0]=0x10;
+    for(unsigned i=0;i<33;++i) {
+      g_ppu->oam[2*i]=(16<<8)|32;
+      g_ppu->oam[2*i+1]=(uint16_t)(0x3000 | ((i&1)<<9));
+    }
+    memset(g_ppu->highOam,0xaa,sizeof g_ppu->highOam);
+    draw(); CHECK(g_ppu->rangeOver==!(flags&8)); CHECK(g_ppu->timeOver==!(flags&8));
+    replay_current(); ++cases;
+  }
+  changes=true; printf("sprite priority/rotation/overflow cases: %u PASS\n",cases);
+}
 #endif
 int main(int argc,char **argv) {
   (void)argv;
@@ -184,6 +242,7 @@ int main(int argc,char **argv) {
 #endif
   } else {
     verify_scene_contributors();
+    verify_sprite_priorities();
     for(unsigned flags=0;flags<=9;++flags) if(!(flags&6)) verify_case(flags);
 #ifdef HD2D_SCANOUT_CAPTURE
     setup(1); armed=true; flooding=true; draw(); CHECK(hd2d_capture_status(capture)==HD2D_LIMIT);
@@ -198,10 +257,11 @@ int main(int argc,char **argv) {
     CHECK(hd2d_capture_line(capture,g_ppu,0)==HD2D_RECORDING);
     g_ppu->mosaic=1;
     CHECK(hd2d_capture_line(capture,g_ppu,1)==HD2D_UNSUPPORTED);
+    CHECK(strstr(hd2d_capture_detail(capture),"line 1: mosaic: requires 0; observed 1"));
     setup(1); CHECK(hd2d_capture_begin(capture,&id,g_ppu)==HD2D_RECORDING);
     ++g_ppu->renderPitch;
     CHECK(hd2d_capture_line(capture,g_ppu,0)==HD2D_ORDER);
-#define REJECT(field,value) do { setup(1); g_ppu->field=(value); CHECK(hd2d_capture_begin(capture,&id,g_ppu)==HD2D_UNSUPPORTED); } while(0)
+#define REJECT(field,value) do { setup(1); g_ppu->field=(value); CHECK(hd2d_capture_begin(capture,&id,g_ppu)==HD2D_UNSUPPORTED); CHECK(strstr(hd2d_capture_detail(capture),#field)); } while(0)
     REJECT(bgmode,7); REJECT(mosaic,0x11); REJECT(setini,1); REJECT(setini,8);
     REJECT(extraLeftRight,16); REJECT(renderVram,g_ppu->vram); REJECT(renderBuffer,NULL);
     REJECT(renderPitch,1000); REJECT(renderFlags,2); REJECT(extraObjectCount,1);

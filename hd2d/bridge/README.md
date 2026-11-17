@@ -2,7 +2,9 @@
 
 Sprint 1 implements a diagnostic, owner-thread recorder at `X2DrawPpuFrame`.
 It does not render in Unity, extract game assets, or alter simulation. The
-standalone suite needs Linux, CMake 3.20+, Python 3.10+, and a C11 compiler.
+standalone suite needs CMake 3.20+, Python 3.10+, and a C11 compiler. Linux is
+verified; a Darwin dead-strip link path and native Apple Silicon CI are added
+in Sprint 2, with qualification status in the [platform audit](../docs/architecture/MACOS_NATIVE_AUDIT.md).
 The unmodified pinned PPU is the offline replay oracle.
 
 ## ROM-independent build and checks
@@ -21,7 +23,7 @@ python3 hd2d/tools/check_upstream.py
 The native tests link the actual title loop with synthetic HDMA inputs, the
 pinned PPU, and small standalone host stubs. Both the recorder and the real
 one-shot adapter are tested; unused CPU/ROM code is discarded by Linux section
-GC. No ROM, SDL, generated game code, proprietary library, or extracted art is
+GC (Darwin uses dead stripping). No ROM, SDL, generated game code, proprietary library, or extracted art is
 needed. Source patterns are original, generated in `scanout_test.c`.
 
 Inspect an original synthetic capture (choose a new directory each time):
@@ -36,6 +38,21 @@ The Python reader checks structure/integrity only. Native replay decodes the
 file into a fresh PPU and compares all canonical RGBA bytes with the reference.
 It is an offline diagnostic executable, not a function to call alongside a
 live game. It refuses unsupported profiles or an unexpected engine revision.
+
+Sprint 2 adds image/report export, including valid reconstructions that differ:
+
+```sh
+python3 hd2d/tools/validate_capture.py hd2d/local/example-scanout/capture.x2scan \
+  --replay hd2d/local/native/scanout_replay --output hd2d/local/example-validation
+```
+
+The new directory receives reference/reconstruction/difference PNGs and a
+JSON/text report. Exit 0 means exact equality, 1 means differing pixels, and
+2 means an input/tool error without a fidelity verdict. Profile failures now
+identify the first failed field/policy, its observed value, and draw-entry or
+line boundary. The wire format and default-off integration are unchanged.
+See the [private real-game workflow](../docs/guides/PRIVATE_CAPTURE_WORKFLOW.md)
+for ROM-backed builds and intro-stage calibration.
 
 Sanitizer check:
 

@@ -3,6 +3,7 @@
 #include "snes/ws_shadow.h"
 #include "sha256.h"
 #include <stdio.h>
+#include <stdarg.h>
 #ifdef _WIN32
 #include <direct.h>
 #define make_directory(p) _mkdir(p)
@@ -23,6 +24,7 @@ struct Hd2dCapture {
   size_t last[3];
   uint64_t copied, compared;
   uint32_t flags, pitch;
+  char detail[256];
   const uint8_t *surface; /* Checked for stability; never published. */
 };
 static const size_t memory_sizes[3] = {65536, 512, 544};
@@ -45,32 +47,68 @@ static bool zero(const void *data, size_t n) {
   return true;
 }
 
-bool hd2d_profile_supported(const Ppu *p) {
+static bool requirement(char *out, size_t size, const char *format, ...) {
+  if (size) {
+    va_list args; va_start(args,format); vsnprintf(out,size,format,args); va_end(args);
+  }
+  return false;
+}
+bool hd2d_profile_check(const Ppu *p, char *out, size_t size) {
   const uint16_t endian=1;
-  if (!p || *(const uint8_t *)&endian != 1 || PPU_mode(p)!=1 || p->mosaic ||
-      p->setini || p->frameOverscan || p->frameInterlace ||
-      !p->renderBuffer || p->renderPitch<1024 || p->renderPitch>16384 ||
-      p->renderPitch%4 || (uintptr_t)p->renderBuffer%4 ||
-      p->renderFlags & ~(kPpuRenderFlags_NewRenderer|kPpuRenderFlags_NoSpriteLimits) ||
-      p->extraLeftCur || p->extraRightCur || p->extraLeftRight || p->extraBottomCur ||
-      p->renderVram || p->extraObjects || p->extraObjectCount ||
-      p->mode7Hd.pixels || p->widescreenLineEnhancer ||
-      p->wsHudSplitHeight || p->wsHudOamSlots || p->wsHudOamSlots2 ||
-      p->wsBg3WidenY || p->wsLayerWidenMask || p->wsMode2CaptureLayer ||
-      p->wsLayerClamp || p->wsLayerMirror || p->wsLayerRepeat ||
-      p->wsWindowExpandLayers || p->wsWindowExpandWindows ||
-      p->wsOamLeftHintStrict || p->wsOamRightHintStrict ||
-      g_snes_ppu_dbg_layer_mask != 0xff) return false;
-#define EMPTY(member) if (!zero(p->member,sizeof p->member)) return false
+  if(size) out[0]=0;
+  if(!p) return requirement(out,size,"ppu: required live PPU is absent");
+  if(*(const uint8_t *)&endian!=1) return requirement(out,size,"host.endian: requires little endian");
+  if(PPU_mode(p)!=1) return requirement(out,size,"bgmode: requires Mode 1; observed Mode %u (0x%02x)",PPU_mode(p),p->bgmode);
+#define ZERO(field) if(p->field) return requirement(out,size,#field ": requires 0; observed %u",(unsigned)p->field)
+  ZERO(mosaic);
+  if(p->setini) return requirement(out,size,"setini: requires 0; observed 0x%02x (interlace=%u objInterlace=%u overscan=%u pseudoHires=%u extBg=%u)",
+    p->setini,!!PPU_interlace(p),!!PPU_objInterlace(p),!!PPU_overscan(p),!!PPU_pseudoHires(p),!!PPU_m7extBg(p));
+  ZERO(frameOverscan); ZERO(frameInterlace);
+  if(!p->renderBuffer) return requirement(out,size,"renderBuffer: requires a bound 224-row surface");
+  if(p->renderPitch<1024 || p->renderPitch>16384 || p->renderPitch%4)
+    return requirement(out,size,"renderPitch: requires 1024..16384 bytes aligned to 4; observed %u",p->renderPitch);
+  if((uintptr_t)p->renderBuffer%4) return requirement(out,size,"renderBuffer: requires 4-byte alignment");
+  if(p->renderFlags & ~(kPpuRenderFlags_NewRenderer|kPpuRenderFlags_NoSpriteLimits))
+    return requirement(out,size,"renderFlags: only bits 0 and 3 supported; observed 0x%x",p->renderFlags);
+  ZERO(extraLeftCur); ZERO(extraRightCur); ZERO(extraLeftRight); ZERO(extraBottomCur);
+#define ABSENT(field) if(p->field) return requirement(out,size,#field ": requires no host override/output")
+  ABSENT(renderVram); ABSENT(extraObjects); ABSENT(extraObjectCount);
+  ABSENT(mode7Hd.pixels); ABSENT(widescreenLineEnhancer);
+#undef ABSENT
+  ZERO(wsHudSplitHeight); ZERO(wsHudOamSlots); ZERO(wsHudOamSlots2);
+  ZERO(wsBg3WidenY); ZERO(wsLayerWidenMask); ZERO(wsMode2CaptureLayer);
+  ZERO(wsLayerClamp); ZERO(wsLayerMirror); ZERO(wsLayerRepeat);
+  ZERO(wsWindowExpandLayers); ZERO(wsWindowExpandWindows);
+  ZERO(wsOamLeftHintStrict); ZERO(wsOamRightHintStrict);
+#undef ZERO
+  if(g_snes_ppu_dbg_layer_mask!=0xff)
+    return requirement(out,size,"debug.layer_mask: requires 0xff; observed 0x%02x",g_snes_ppu_dbg_layer_mask);
+#define EMPTY(member) do { const uint8_t *v=(const uint8_t *)p->member; \
+  for(size_t i=0;i<sizeof p->member;++i) if(v[i]) return requirement(out,size, \
+    #member "[%zu]: requires 0; observed %u (flattened byte index)",i,(unsigned)v[i]); } while(0)
   EMPTY(wsClampY0); EMPTY(wsClampY1); EMPTY(wsRepeatY0); EMPTY(wsRepeatY1);
   EMPTY(wsStretchY0); EMPTY(wsStretchY1); EMPTY(wsAnchorY0); EMPTY(wsAnchorY1);
   EMPTY(wsMarginGapL); EMPTY(wsMarginGapR); EMPTY(wsWorldY0); EMPTY(wsWorldY1);
   EMPTY(wsElasticNSeg); EMPTY(wsViewportInsetL); EMPTY(wsViewportInsetR);
 #undef EMPTY
-  for (int i=0;i<4;++i) if(WsShadowLayerActive(i)) return false;
-  for (int i=0;i<kPpuOverlaySource_Count;++i)
-    if(p->overlayRenderBuffer[i] || p->overlayRenderPitch[i]) return false;
+  for(int i=0;i<4;++i) if(WsShadowLayerActive(i))
+    return requirement(out,size,"WsShadowLayerActive[%d]: requires inactive provider",i);
+  for(int i=0;i<kPpuOverlaySource_Count;++i) {
+    if(p->overlayRenderBuffer[i]) return requirement(out,size,"overlayRenderBuffer[%d]: requires no output",i);
+    if(p->overlayRenderPitch[i]) return requirement(out,size,"overlayRenderPitch[%d]: requires 0; observed %u",i,p->overlayRenderPitch[i]);
+  }
   return true;
+}
+bool hd2d_profile_supported(const Ppu *p) { return hd2d_profile_check(p,NULL,0); }
+static bool capture_profile(Hd2dCapture *c, const Ppu *p, int line) {
+  char why[200];
+  if(hd2d_profile_check(p,why,sizeof why)) return true;
+  if(line<0) snprintf(c->detail,sizeof c->detail,"draw entry: %s",why);
+  else snprintf(c->detail,sizeof c->detail,"line %d: %s",line,why);
+  return false;
+}
+const char *hd2d_capture_detail(const Hd2dCapture *c) {
+  return c && c->detail[0] ? c->detail : hd2d_status_name(hd2d_capture_status(c));
 }
 
 Hd2dCapture *hd2d_capture_new(size_t limit, void *(*allocate)(size_t), void (*release)(void *)) {
@@ -99,10 +137,10 @@ static bool revision(const char *s) {
 }
 Hd2dStatus hd2d_capture_begin(Hd2dCapture *c, const Hd2dIdentity *id, const Ppu *p) {
   if(!c) return HD2D_LIMIT;
-  c->status=HD2D_IDENTITY;
+  c->status=HD2D_IDENTITY; c->detail[0]=0;
   if(!id || !id->sequence || !id->draw || zero(id->session,16) ||
      !revision(id->producer) || !revision(id->engine) || id->source>1) return c->status;
-  if(!hd2d_profile_supported(p)) return c->status=HD2D_UNSUPPORTED;
+  if(!capture_profile(c,p,-1)) return c->status=HD2D_UNSUPPORTED;
   memset(c->bytes,0,HD2D_MEMORY_OFFSET);
   c->lines=0; memset(c->count,0,sizeof c->count); c->copied=c->compared=0;
   c->used=HD2D_MEMORY_OFFSET; c->flags=p->renderFlags;
@@ -144,7 +182,7 @@ Hd2dStatus hd2d_capture_line(Hd2dCapture *c, const Ppu *p, unsigned line) {
   if(!c || c->status!=HD2D_RECORDING) return hd2d_capture_status(c);
   if(line!=c->lines || line>=HD2D_LINES || p->renderFlags!=c->flags ||
      p->renderBuffer!=c->surface || p->renderPitch!=c->pitch) return c->status=HD2D_ORDER;
-  if(!hd2d_profile_supported(p)) return c->status=HD2D_UNSUPPORTED;
+  if(!capture_profile(c,p,(int)line)) return c->status=HD2D_UNSUPPORTED;
   uint8_t *row=c->bytes+HD2D_HEADER+line*HD2D_LINE_BYTES;
   hd2d_write32(row,line);
   hd2d_write32(row+4,memory(c,0,PpuRenderVram(p),NULL));
