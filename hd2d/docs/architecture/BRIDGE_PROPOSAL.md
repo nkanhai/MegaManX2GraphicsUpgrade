@@ -1,6 +1,12 @@
 # Rendering bridge proposal
 
-Status: recommended design, **not an implemented runtime exporter**.
+Status: Sprint 0 design, now partially implemented by the
+[Sprint 1 native recorder](../../bridge/README.md). The implemented profile is
+native Mode 1 only; the runtime uses a bounded single binary container instead
+of the proposed JSON-plus-blobs packaging. See the
+[runtime v1 specification](../../schemas/RUNTIME_SCANOUT_V1.md) for the actual
+contract and [Sprint 1 report](../roadmap/SPRINT_1_REPORT.md) for parity evidence
+and remaining gaps. The proposals below remain the longer-term direction.
 Source basis: [RENDERING_PIPELINE.md](RENDERING_PIPELINE.md).
 
 Start with **recorded scanout snapshots**, captured inside the existing X2
