@@ -265,7 +265,7 @@ int main(int argc,char **argv) {
       /* All pointer fields start null except the bound host surface. These
        * hashes compare the full PPU (including derived caches), CPU and DMA
        * against a separately compiled-out process driven by identical events. */
-      Ppu state=*g_ppu; state.renderBuffer=NULL;
+      Ppu state; memcpy(&state,g_ppu,sizeof state); state.renderBuffer=NULL;
       uint8_t digest[32]; sha256_compute((const uint8_t *)&state,sizeof state,digest);
       printf("ppu_sha256="); for(unsigned i=0;i<32;++i) printf("%02x",digest[i]); puts("");
       sha256_compute((const uint8_t *)&g_cpu,sizeof g_cpu,digest);
