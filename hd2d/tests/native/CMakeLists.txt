@@ -58,9 +58,11 @@ foreach(mode IN ITEMS on off adapter)
         add_test(NAME scanout_${mode} COMMAND scanout_${mode})
     endif()
 endforeach()
-add_executable(scanout_replay replay_main.c)
+add_executable(scanout_replay ${ROOT}/hd2d/tools/scanout_replay.c)
 target_link_libraries(scanout_replay PRIVATE hd2d_test_ppu)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME scanout_files COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test_files.py $<TARGET_FILE:scanout_on>
     $<TARGET_FILE:scanout_off> $<TARGET_FILE:scanout_adapter> $<TARGET_FILE:scanout_replay>)
+add_test(NAME scanout_validation COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_validation.py $<TARGET_FILE:scanout_on> $<TARGET_FILE:scanout_replay>)

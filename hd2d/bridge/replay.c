@@ -18,8 +18,9 @@ static int64_t signed_wire(uint32_t v) { return v<=INT32_MAX ? v : (int64_t)v-IN
 #define value_s16(v) signed_wire(v)
 #define value_s32(v) signed_wire(v)
 
-bool hd2d_replay(const uint8_t *b, size_t n, uint8_t *rgba, char *error, size_t cap) {
+Hd2dReplayResult hd2d_reconstruct(const uint8_t *b, size_t n, uint8_t *rgba, char *error, size_t cap) {
   const char *why="invalid header";
+  char detail[256];
   Ppu *p=NULL;
   uint8_t *pixels=NULL;
   const uint8_t *mem[3][HD2D_LINES]={{0}};
@@ -83,8 +84,11 @@ bool hd2d_replay(const uint8_t *b, size_t n, uint8_t *rgba, char *error, size_t 
       p->oam[i]=(uint16_t)(oam[2*i]|oam[2*i+1]<<8);
     }
     memcpy(p->highOam,oam+512,32);
-    why="unsupported profile or offline environment";
-    if(!hd2d_profile_supported(p)) goto fail;
+    char requirement[200];
+    if(!hd2d_profile_check(p,requirement,sizeof requirement)) {
+      snprintf(detail,sizeof detail,"line %u: %s",line,requirement);
+      why=detail; goto fail;
+    }
     ppu_drawCapturedLine(p,(int)line,true);
   }
   why="unused memory version";
@@ -92,13 +96,15 @@ bool hd2d_replay(const uint8_t *b, size_t n, uint8_t *rgba, char *error, size_t 
   for(unsigned i=0;i<HD2D_RGBA_BYTES;i+=4) {
     rgba[i]=pixels[i+2]; rgba[i+1]=pixels[i+1]; rgba[i+2]=pixels[i]; rgba[i+3]=255;
   }
-  why="reference pixel mismatch";
-  if(memcmp(rgba,b+HD2D_REFERENCE_OFFSET,HD2D_RGBA_BYTES)) goto fail;
+  bool matches=!memcmp(rgba,b+HD2D_REFERENCE_OFFSET,HD2D_RGBA_BYTES);
   free(pixels); free(p);
-  if(cap) snprintf(error,cap,"verified: 57344 RGBA pixels match pinned PPU");
-  return true;
+  if(cap) snprintf(error,cap,"%s",matches ? "verified: 57344 RGBA pixels match pinned PPU" : "reference pixel mismatch");
+  return matches ? HD2D_REPLAY_MATCH : HD2D_REPLAY_MISMATCH;
 fail:
   free(pixels); free(p);
   if(cap) snprintf(error,cap,"%s",why);
-  return false;
+  return HD2D_REPLAY_INVALID;
+}
+bool hd2d_replay(const uint8_t *b, size_t n, uint8_t *rgba, char *error, size_t cap) {
+  return hd2d_reconstruct(b,n,rgba,error,cap)==HD2D_REPLAY_MATCH;
 }

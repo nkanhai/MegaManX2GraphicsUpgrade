@@ -45,10 +45,16 @@ const uint8_t *hd2d_capture_data(const Hd2dCapture *, size_t *length);
 /* Creates a NEW directory, then publishes capture.x2scan last. Never overwrites. */
 Hd2dStatus hd2d_capture_publish(Hd2dCapture *, const char *new_directory);
 bool hd2d_profile_supported(const Ppu *);
+/* First failed requirement, including observed value. Never mutates the PPU. */
+bool hd2d_profile_check(const Ppu *, char *detail, size_t capacity);
+const char *hd2d_capture_detail(const Hd2dCapture *);
 uint32_t hd2d_read32(const uint8_t *);
 uint64_t hd2d_read64(const uint8_t *);
 void hd2d_write32(uint8_t *, uint32_t);
 /* Offline only: validate the complete container, reconstruct into a fresh PPU,
  * and compare canonical RGBA against its reference. No runtime global changes. */
 bool hd2d_replay(const uint8_t *, size_t, uint8_t *rgba, char *error, size_t);
+typedef enum { HD2D_REPLAY_INVALID, HD2D_REPLAY_MATCH, HD2D_REPLAY_MISMATCH } Hd2dReplayResult;
+/* RGBA is valid on MATCH or MISMATCH; INVALID must never export an image. */
+Hd2dReplayResult hd2d_reconstruct(const uint8_t *, size_t, uint8_t *rgba, char *error, size_t);
 #endif

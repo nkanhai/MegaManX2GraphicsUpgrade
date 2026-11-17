@@ -31,4 +31,5 @@ jobs:
           cmake -S . -B hd2d/local/macos-host -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DSNESRECOMP_SDL_BACKEND=SDL2 -DSNESRECOMP_SETUP_HOST=ON -DHD2D_SCANOUT_CAPTURE=ON
           cmake --build hd2d/local/macos-host --parallel 3
           file hd2d/local/macos-host/MegaManX2SNESRecomp
+          MMX_LOG_CONSOLE=1 hd2d/local/macos-host/MegaManX2SNESRecomp --help
           ctest --test-dir hd2d/local/macos-host --output-on-failure

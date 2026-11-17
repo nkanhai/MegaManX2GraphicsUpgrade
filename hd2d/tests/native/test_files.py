@@ -62,6 +62,13 @@ def main():
             rejected = run(adapter, extra=config | {"HD2D_CAPTURE_DIR": str(dest), policy: "1"})
             check(not dest.exists() and "rejected" in rejected.stderr, policy)
             check(rejected.stdout == disabled.stdout, "policy rejection changed pixels")
+        for policy, reason in (("TEST_PPU_MOSAIC", "draw entry: mosaic: requires 0; observed 17"),
+                               ("TEST_MIDFRAME_MOSAIC", "line 64: mosaic: requires 0; observed 17")):
+            dest = root / policy
+            rejected = run(adapter, extra=config | {"HD2D_CAPTURE_DIR": str(dest), policy: "1"})
+            check(not dest.exists() and reason in rejected.stderr, "exact profile failure: " + policy)
+            baseline = run(off, root / "unused", extra={policy: "1"})
+            check(rejected.stdout == baseline.stdout, "unsupported capture altered drawing")
         for selection in ("-1", "0", "1x", "18446744073709551616"):
             dest = root / "bad-selection"
             rejected = run(adapter, extra=config | {"HD2D_CAPTURE_DIR": str(dest), "HD2D_CAPTURE_DRAW": selection})
