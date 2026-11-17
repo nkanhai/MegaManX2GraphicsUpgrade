@@ -1,0 +1,21 @@
+# Candidate controller-only sequence. Not yet verified against a real ROM.
+# Adapted from the existing tools/navigate.py named sequences. Preserve the
+# calibrated file and its SHA with your private capture; never use RAM pokes.
+wait 240
+press start 6
+wait 40
+press start 6
+wait 40
+press start 6
+wait 40
+press start 6
+wait 40
+press start 6
+wait 40
+press start 6
+wait 40
+press start 6
+wait 60
+press start 6
+wait 2000
+quit
