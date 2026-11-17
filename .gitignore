@@ -18,7 +18,7 @@ hg51bs169.data.rom
 # Build trees
 /build*/
 /release*/
-/CMakeFiles/
+CMakeFiles/
 CMakeCache.txt
 
 # Local runtime state
@@ -53,4 +53,4 @@ tools/__pycache__/
 /exports/
 /captures/
 *.o
-*.obj
+# Wavefront .obj meshes are source assets; compiler outputs belong in build trees.
