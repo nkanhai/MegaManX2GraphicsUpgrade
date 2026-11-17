@@ -164,3 +164,29 @@ Its decisive acceptance gate is byte-for-byte reconstruction against the
 pinned upstream PPU for a synthetic raster-changing field, with capture-on/off
 guest state unchanged and invalid/incomplete captures rejected. Only after that
 should a user-owned ROM supply local real-game captures or Unity importing begin.
+
+## Publication status
+
+All project changes are committed locally on `feature/hd2d-sprint-0`, starting
+with commit `3a2888486227b7d49136269ff8c203499f71ff70` and a follow-up documenting
+this publication blocker. The working tree is clean after these commits.
+
+Git push to the canonical fork failed with HTTP 403 (`Permission ... denied`).
+The GitHub connector's `create_branch` failed with HTTP 403 and
+`Resource not accessible by integration`. Although repository metadata reports
+owner push/admin permissions, the active integration lacks write access.
+No remote feature branch or PR was created. Engineering work is complete;
+publication to the owner's fork remains outstanding.
+
+A review patch and Git bundle are generated outside the repository at
+`/workspace/hd2d-sprint-0.patch` and `/workspace/hd2d-sprint-0.bundle`.
+The prepared PR body is in ignored `hd2d/local/PR_BODY.md`. Once repository write
+access is available, publish without changing the target:
+
+```sh
+git push --set-upstream origin feature/hd2d-sprint-0
+gh pr create --repo nkanhai/MegaManX2GraphicsUpgrade --base master \
+  --head feature/hd2d-sprint-0 \
+  --title 'Establish HD-2D Sprint 0 baseline and graphics capture proposal' \
+  --body-file hd2d/local/PR_BODY.md
+```

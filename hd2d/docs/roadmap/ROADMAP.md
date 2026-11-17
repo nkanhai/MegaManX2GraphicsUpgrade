@@ -58,7 +58,7 @@ silently move a gitlink to an unpublished submodule commit.
 | R5 medium | Semantic misclassification and unstable asset addresses | Content/context hashes and evidence-tagged annotations; never label OAM slots as persistent entities | Owner creative direction + engineering |
 | R6 medium | Widescreen/host overlays diverge from native graphics | Native profile first, explicit render configuration, reject unsupported settings, later separate presentation-policy support | Engineering |
 | R7 medium | Licensing/asset provenance; no clear dizProjects license file found | Preserve notices/pins, do not copy annotation corpus or game assets, review runtime distribution before release | Project owner |
-| R8 resolved | Canonical repository initially missing from workspace | Owner confirmed `nkanhai/MegaManX2GraphicsUpgrade`; fetched `origin/master` matches audited upstream exactly; target PR only to this fork | Project owner |
+| R8 blocked | Active GitHub connection cannot write to confirmed fork (HTTP 403) | Local feature commits and patch preserve work; enable repository write access, then push and open PR against fork master | Project owner / GitHub connection |
 
 Material decisions still open: embedding vs IPC, authoritative/speculative
 frame selection for live playback, native API lifecycle, 2D vs Universal URP,

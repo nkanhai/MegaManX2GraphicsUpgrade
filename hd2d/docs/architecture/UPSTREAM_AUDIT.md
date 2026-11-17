@@ -12,9 +12,12 @@ repository. `origin/master` is exactly the audited commit (zero commits ahead
 or behind), so the initial audit remains applicable without rework.
 Work branch: `feature/hd2d-sprint-0`; PR base: `origin/master`.
 
-The connected account has push/admin permission on the confirmed fork. The
-initial guessed repository name was unavailable; that setup uncertainty is
-resolved. No PR or changes target the original author's repository.
+Repository metadata reports that the account has push/admin permission, but
+both Git push and connector branch creation returned HTTP 403. The connector
+reported `Resource not accessible by integration`: account ownership does not
+establish write permission for the active connection. The canonical fork is
+confirmed; remote publication remains blocked. No changes target the original
+author's repository.
 
 Exact URLs and revisions are also in [upstream-lock.json](upstream-lock.json).
 `git submodule update --init --recursive` and `bash tools/bootstrap.sh` succeeded.
