@@ -1,0 +1,10 @@
+{
+  "name": "X2HD2D.Runtime",
+  "references": [
+    "X2HD2D.Core",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Universal.2D.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ],
+  "autoReferenced": true
+}

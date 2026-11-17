@@ -53,6 +53,16 @@ A small hook to the title draw loop and an isolated recorder are appropriate;
 if linking needs framework edits, keep them separately reviewable and do not
 silently move a gitlink to an unpublished submodule commit.
 
+## Sprint 4: offline Unity component reconstruction
+
+The [prototype](../../unity/README.md) now implements a read-only runtime-v1
+reader, independent background-priority quads and OAM pieces, source-data
+inspection, pixel comparison export and an isolated normal-map/Light2D view.
+Eighteen original synthetic static frames match the pinned PPU in managed C#.
+Raster changes, windowing and color math remain explicitly incomplete in this
+component renderer. Unity Editor/GPU and private-gameplay acceptance remain
+open; see the [Sprint 4 report](SPRINT_4_REPORT.md). There is no live integration.
+
 ## Risk register
 
 Sprint 3 adds interactive keyboard capture before Unity work. The owner reports
@@ -66,13 +76,14 @@ starting the Unity milestone. It supplies diagnostic reasons, stronger
 synthetic coverage, private ROM build/capture tooling and image-diff reports.
 See [Sprint 2 report](SPRINT_2_REPORT.md) for verified Linux results and the
 specific ROM-access/Apple-Silicon-runner blockers. The long-term milestones
-above are not sprint numbers; Unity and the asset catalogue remain deferred.
+above are not sprint numbers. Sprint 4 starts offline Unity reconstruction;
+the asset catalogue remains deferred.
 
 | ID / severity | Risk and evidence | Mitigation / validation gate | Owner |
 |---|---|---|---|
 | R1 high | Incomplete scanout state: final PPU values lose HDMA changes; X2 does not use shared journal replay; VRAM uploads are excluded from that journal | Observe each actual line and effective memory; differential synthetic replay then real captures; distinguish upstream from hardware fidelity | Engineering + owner scene review |
 | R2 high | Frame mismatch/torn reads: TCP thread reads live state; frame ring precedes raster; run-ahead/rollback complicate identity | Producer-owned immutable capture, explicit phase/session/epoch, paired pixels; first profile excludes speculative modes | Engineering |
-| R3 high | Unity fidelity and portability unproven: sprite sorting/alpha do not encode SNES math; Apple Silicon native host untested | Recorded importer and pixel comparisons before lighting; separate macOS build spike; defer final ABI/URP decision | Owner + engineering |
+| R3 high | Unity GPU fidelity/portability unproven; managed static-frame parity verified. Native Apple Silicon host success is owner-observed | Run Unity Metal/EditMode tests and private GPU comparisons; keep unsupported effects explicit and enhancement isolated | Owner + engineering |
 | R4 medium | Copy/serialization cost: up to ~15 MB per naive scanout before reference pixels | One-shot bounded captures, immutable dedup, measure copy/compare/write cost, whole-record rejection on overflow | Engineering |
 | R5 medium | Semantic misclassification and unstable asset addresses | Content/context hashes and evidence-tagged annotations; never label OAM slots as persistent entities | Owner creative direction + engineering |
 | R6 medium | Widescreen/host overlays diverge from native graphics | Native profile first, explicit render configuration, reject unsupported settings, later separate presentation-policy support | Engineering |
